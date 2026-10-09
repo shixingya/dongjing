@@ -1,0 +1,9 @@
+node_modules/
+.venv/
+__pycache__/
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+_temp/
+*.tmp

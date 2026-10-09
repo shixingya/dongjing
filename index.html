@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>动镜 DongJing · 打开摄像头，AI 即时健身私教</title>
+<meta name="description" content="纯网页 AI 体感健身：摄像头实时识别动作，只计标准有效次数，实时语音纠错，体态评估。全部本地推理，画面不上传。">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ====== 顶部导航 ====== -->
+<header class="topbar">
+  <div class="brand" data-go="home">
+    <span class="brand-logo">◉</span>
+    <span class="brand-name">动镜<em>DongJing</em></span>
+  </div>
+  <nav class="tabs">
+    <button class="tab active" data-go="home">训练</button>
+    <button class="tab" data-go="report">报告</button>
+    <button class="tab" data-go="me">我的</button>
+  </nav>
+  <div class="top-right">
+    <span id="quota-chip" class="chip"></span>
+    <button id="btn-voice" class="icon-btn" title="语音纠错开关">🔊</button>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ====== 首页：动作库 ====== -->
+<section class="screen active" id="screen-home">
+  <div class="hero">
+    <div class="hero-txt">
+      <h1>打开摄像头<br><span class="hl">AI 私教</span> 马上开工</h1>
+      <p>在家、在办公室，<b>只计标准有效次数</b>，动作错了当场喊你纠正。<br>全部 AI 在浏览器本地运算，<b>画面不上传云端</b>。</p>
+      <div class="hero-btns">
+        <button class="btn primary" data-ex="squat">▶ 开始今日训练</button>
+        <button class="btn ghost" data-go="posture">🧍 体态评估</button>
+      </div>
+    </div>
+    <div class="hero-stats card">
+      <div class="stat"><b id="hs-days">0</b><span>连续打卡(天)</span></div>
+      <div class="stat"><b id="hs-week">0</b><span>本周训练(次)</span></div>
+      <div class="stat"><b id="hs-reps">0</b><span>本周有效次数</span></div>
+    </div>
+  </div>
+
+  <h2 class="sec-title">动作库 <small>错误动作不计入次数</small></h2>
+  <div class="ex-grid" id="ex-grid"><!-- JS 渲染动作卡片 --></div>
+
+  <div class="privacy-note">🔒 隐私承诺：摄像头画面仅在本机浏览器内运算，不录制、不上传、不经过任何服务器。</div>
+</section>
+
+<!-- ====== 训练页 ====== -->
+<section class="screen" id="screen-train">
+  <div class="train-wrap">
+    <div class="stage" id="stage">
+      <video id="cam" autoplay playsinline muted></video>
+      <canvas id="skel"></canvas>
+
+      <!-- 相机不可用提示 -->
+      <div class="stage-mask" id="mask-cam" hidden>
+        <div class="mask-box">
+          <div class="mask-ico">🎥</div>
+          <h3>无法访问摄像头</h3>
+          <p id="cam-err-txt">请允许浏览器使用摄像头；需 HTTPS / localhost / 本地打开，且非隐身模式。</p>
+          <button class="btn primary" id="btn-retry-cam">重试</button>
+        </div>
+      </div>
+      <div class="stage-mask" id="mask-model" hidden>
+        <div class="mask-box">
+          <div class="mask-ico">🧠</div>
+          <h3>AI 模型加载中…</h3>
+          <p id="model-err-txt">首次使用需联网下载姿态模型（约 5MB，之后走缓存）。</p>
+          <button class="btn primary" id="btn-retry-model" hidden>重新加载</button>
+        </div>
+      </div>
+
+      <!-- 机位引导（半透明，摄像头一进页即可看到自己+骨架伴随） -->
+      <div class="stage-mask thin" id="mask-setup" hidden>
+        <div class="mask-box">
+          <div class="mask-ico" id="setup-ico">📷</div>
+          <h3 id="setup-title">机位摆放</h3>
+          <p id="setup-txt"></p>
+          <div class="setup-hint" id="setup-person">未检测到人：请调整机位，让全身入镜</div>
+          <button class="btn primary" id="btn-setup-ok">放好了，下一步</button>
+        </div>
+      </div>
+
+      <!-- 校准 -->
+      <div class="stage-mask thin" id="mask-calib" hidden>
+        <div class="calib-box">
+          <div id="calib-ico" class="calib-ico">◌</div>
+          <div id="calib-txt">请站入画面，摆好起始姿势</div>
+        </div>
+      </div>
+
+      <!-- 休息倒计时 -->
+      <div class="stage-mask" id="mask-rest" hidden>
+        <div class="mask-box">
+          <h3>组间休息</h3>
+          <div class="rest-num" id="rest-num">15</div>
+          <p id="rest-txt">下一组：第 2 / 3 组</p>
+        </div>
+      </div>
+
+      <!-- HUD -->
+      <div class="hud" id="hud" hidden>
+        <div class="hud-top">
+          <button class="hud-btn" id="btn-quit">✕ 退出</button>
+          <div class="hud-name" id="hud-name">深蹲</div>
+          <div class="hud-status" id="hud-person">未检测到人</div>
+        </div>
+        <div class="hud-center">
+          <div class="hud-reps"><b id="hud-rep">0</b><span id="hud-target">/10</span></div>
+          <div class="hud-phase" id="hud-phase">等待动作…</div>
+        </div>
+        <div class="hud-bottom">
+          <div class="hud-set" id="hud-set">第 1 / 3 组</div>
+          <div class="hud-fps" id="hud-fps"></div>
+        </div>
+        <div class="feedback" id="feedback"></div>
+      </div>
+    </div>
+    <aside class="train-side">
+      <div class="card side-card">
+        <h4 id="side-name">动作要领</h4>
+        <ul id="side-tips"></ul>
+      </div>
+      <div class="card side-card mini">
+        <h4>实时问题统计</h4>
+        <div id="side-issues" class="side-issues">暂无</div>
+      </div>
+      <div class="card side-card mini pro-tip" id="tip-rotator"></div>
+    </aside>
+  </div>
+</section>
+
+<!-- ====== 结果页 ====== -->
+<section class="screen" id="screen-result">
+  <div class="result-card card">
+    <div class="result-emoji" id="res-emoji">💪</div>
+    <h2 id="res-title">训练完成！</h2>
+    <div class="result-score"><b id="res-score">0</b><span>动作评分</span></div>
+    <div class="result-grid">
+      <div><b id="res-reps">0</b><span>有效次数</span></div>
+      <div><b id="res-bad">0</b><span>无效次数</span></div>
+      <div><b id="res-dur">0s</b><span>训练时长</span></div>
+      <div><b id="res-cal">0</b><span>千卡(约)</span></div>
+    </div>
+    <div class="result-issues" id="res-issues"></div>
+    <div class="result-btns">
+      <button class="btn primary" data-go="home">回首页</button>
+      <button class="btn ghost" id="btn-again">再来一组</button>
+      <button class="btn ghost" data-go="report">查看报告</button>
+    </div>
+  </div>
+</section>
+
+<!-- ====== 体态评估页 ====== -->
+<section class="screen" id="screen-posture">
+  <div class="posture-wrap">
+    <div class="card posture-intro" id="pst-intro">
+      <h2>🧍 30 秒体态快评</h2>
+      <p>正面站立，全身入镜，AI 采样 6 秒评估 <b>头前倾 / 高低肩 / 骨盆前倾代偿</b>，给出拉伸建议。</p>
+      <ul class="rule-list">
+        <li>镜头约 2 米外，头顶到脚踝都在画面内</li>
+        <li>自然站直、双手垂放、目视前方</li>
+        <li>穿贴身衣物识别更准</li>
+      </ul>
+      <button class="btn primary" id="btn-pst-start">开始评估</button>
+      <button class="btn ghost" data-go="home">返回</button>
+    </div>
+    <div class="stage posture-stage" id="pst-stage" hidden>
+      <video id="pst-cam" autoplay playsinline muted></video>
+      <canvas id="pst-skel"></canvas>
+      <div class="hud">
+        <div class="hud-top"><button class="hud-btn" id="btn-pst-quit">✕ 退出</button><div class="hud-name">体态评估</div></div>
+        <div class="hud-center"><div class="rest-num" id="pst-count">6</div><div class="hud-phase" id="pst-txt">请自然站直，目视前方…</div></div>
+      </div>
+    </div>
+    <div class="card posture-result" id="pst-result" hidden>
+      <h2>评估结果</h2>
+      <div class="result-score"><b id="pst-score">0</b><span>体面评分</span></div>
+      <div id="pst-items"></div>
+      <div class="pst-advice card-inner" id="pst-advice"></div>
+      <div class="result-btns">
+        <button class="btn primary" id="btn-pst-again">重新评估</button>
+        <button class="btn ghost" data-go="home">回首页</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ====== 报告页 ====== -->
+<section class="screen" id="screen-report">
+  <h2 class="sec-title">训练报告</h2>
+  <div class="rep-grid">
+    <div class="card rep-card">
+      <h4>本周训练</h4>
+      <div class="week-bars" id="week-bars"></div>
+    </div>
+    <div class="card rep-card">
+      <h4>TOP 动作问题 <small>错误不计入次数</small></h4>
+      <div id="top-issues" class="top-issues"></div>
+    </div>
+  </div>
+  <div class="card rep-card">
+    <h4>历史记录</h4>
+    <div id="hist-list" class="hist-list"></div>
+  </div>
+</section>
+
+<!-- ====== 我的 ====== -->
+<section class="screen" id="screen-me">
+  <div class="me-grid">
+    <div class="card me-card">
+      <h4>账户</h4>
+      <div id="me-plan" class="plan-badge"></div>
+      <p class="muted" id="me-quota"></p>
+      <button class="btn gold" id="btn-upgrade">升级 Pro · 解锁全部动作与报表</button>
+      <label class="switch-row"><input type="checkbox" id="chk-demo-pro"><span>演示模式：激活 Pro 体验（v1 占位，支付通道 P1 接入）</span></label>
+    </div>
+    <div class="card me-card">
+      <h4>设置</h4>
+      <label class="row"><span>体重（用于卡路里估算）</span><input id="inp-weight" type="number" min="30" max="200" value="60"> kg</label>
+      <label class="row"><span>语音纠错</span><input type="checkbox" id="chk-voice2" checked></label>
+      <label class="row"><span>音效</span><input type="checkbox" id="chk-sfx" checked></label>
+      <label class="row"><span>画面镜像</span><input type="checkbox" id="chk-mirror" checked></label>
+    </div>
+    <div class="card me-card">
+      <h4>关于动镜</h4>
+      <p class="muted">v1.0 · 纯网页 AI 体感私教。全部姿态推理在浏览器本地完成，不上传任何画面；训练记录仅存储在你的浏览器（localStorage）。</p>
+      <p class="muted">仓库：github.com/shixingya/dongjing</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ====== Pro 弹窗 ====== -->
+<div class="modal" id="modal-pro" hidden>
+  <div class="modal-box card">
+    <button class="modal-x" data-close>✕</button>
+    <h3>升级 <span class="gold-txt">动镜 Pro</span></h3>
+    <p class="muted">解锁全部动作 · 不限训练次数 · 体态趋势 · 报表详情</p>
+    <div class="price-row">
+      <div class="price-opt"><b>¥29</b><span>/月</span></div>
+      <div class="price-opt best"><em>最划算</em><b>¥168</b><span>/年 ≈ ¥14/月</span></div>
+    </div>
+    <button class="btn gold" id="btn-pro-demo">开通 Pro（演示：本地激活）</button>
+    <p class="tiny">支付通道为 v1 占位；正式版接入微信/支付宝与 Apple 内购。</p>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="js/exercises.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
