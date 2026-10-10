@@ -262,7 +262,8 @@
     ex: null, tracker: null, phase: 'off',       // off|setup|calib|live|rest|done
     setIdx: 0, validSet: 0, validTot: 0, attempts: 0,
     issues: {}, timeSec: 0, badSec: 0, activeMs: 0, poseOkMs: 0,
-    liveAt: {}, fbAt: {}, clip: [], clipNext: 0, clipSize: null
+    liveAt: {}, fbAt: {}, clip: [], clipNext: 0, clipSize: null,
+    seq: null, seqIdx: 0, circuitStats: null     // 循环模式：动作序列/当前第几个/各动作成绩
   };
   function findEx(id) { return X.EXERCISES.find(e => e.id === id); }
 
@@ -273,10 +274,17 @@
     if (!DB.pro && quotaUsed() >= FREE_QUOTA) { openPro('本月免费训练次数已用完，升级 Pro 不限次'); return; }
     Object.assign(T, { ex, tracker: X.makeTracker(id), phase: 'setup', setIdx: 0, validSet: 0, validTot: 0,
       attempts: 0, issues: {}, timeSec: 0, badSec: 0, activeMs: 0, poseOkMs: 0, liveAt: {}, fbAt: {},
-      clip: [], clipNext: 0, clipSize: null });
+      clip: [], clipNext: 0, clipSize: null, seq: null, seqIdx: 0, circuitStats: null });
     go('train');
     state.lastHands = null;
     $('#hud').hidden = true; $('#mask-rest').hidden = true;
+    fillTrainChrome(ex);
+    $('#mask-setup').hidden = false;
+    startTipRotator();
+    bootPreview();
+  }
+  /* 训练页初始 chrome（单动作与循环共用） */
+  function fillTrainChrome(ex) {
     $('#setup-ico').textContent = ex.view === 'side' ? '📐' : (ex.seated ? '🪑' : '📷');
     $('#setup-title').textContent = (ex.view === 'side' ? '机位：侧面' : '机位：正面') + (ex.seated ? ' · 坐姿即可' : '');
     $('#setup-txt').textContent = ex.setup;
@@ -284,9 +292,6 @@
     $('#side-tips').innerHTML = ex.tips.map(t => '<li>' + t + '</li>').join('');
     $('#side-issues').textContent = '暂无';
     $('#hud-name').textContent = ex.name;
-    $('#mask-setup').hidden = false;
-    startTipRotator();
-    bootPreview();
   }
   /* 进页即预热摄像头+模型：检测到人立刻骨架伴随（半透明引导遮罩下可见） */
   async function bootPreview() {
@@ -350,7 +355,8 @@
   function setHud() {
     $('#hud-rep').textContent = T.ex.mode === 'time' ? Math.floor(T.timeSec) : T.validSet;
     $('#hud-target').textContent = T.ex.mode === 'time' ? 's /' + T.ex.target + 's' : '/' + T.ex.target;
-    $('#hud-set').textContent = '第 ' + (T.setIdx + 1) + ' / ' + T.ex.sets + ' 组 · 累计有效 ' + T.validTot;
+    const cum = T.seq ? (T.circuitStats || []).reduce((a, r) => a + r.valid, 0) + T.validTot : T.validTot;
+    $('#hud-set').textContent = (T.seq ? '循环 ' + (T.seqIdx + 1) + ' / ' + T.seq.length : '第 ' + (T.setIdx + 1) + ' / ' + T.ex.sets + ' 组') + ' · 累计有效 ' + cum;
   }
   function feedback(msg, cls, key, voice, interval) {
     const now = Date.now();
@@ -391,7 +397,7 @@
         T.poseOkMs += dt;
         if (T.poseOkMs > 900) {
           T.phase = 'live'; $('#mask-calib').hidden = true; $('#hud').hidden = false;
-          if (!DB.pro) { DB.quota = { month: monthKey(), used: quotaUsed() + 1 }; save(); refreshChip(); }
+          if (!DB.pro && (!T.seq || T.seqIdx === 0)) { DB.quota = { month: monthKey(), used: quotaUsed() + 1 }; save(); refreshChip(); }   // 循环整轮只扣 1 次额度
           feedback('开始！目标 ' + (ex.mode === 'time' ? ex.target + ' 秒' : ex.target + ' 次'), 'good', 'start', true);
           setHud();
         }
@@ -463,6 +469,7 @@
   function completeSet() {
     T.phase = 'rest';
     speak('第 ' + (T.setIdx + 1) + ' 组完成，休息', true);
+    if (T.seq) { advanceCircuit(); return; }        // 循环模式：切换到下一个动作
     if (T.setIdx + 1 >= T.ex.sets) { endTrain('saveShow'); return; }
     $('#mask-rest').hidden = false;
     $('#rest-txt').textContent = '下一组：第 ' + (T.setIdx + 2) + ' / ' + T.ex.sets + ' 组';
@@ -525,16 +532,124 @@
       ? iss.map(([k, n]) => '<div class="ri"><span>' + (X.ISSUES[k] ? X.ISSUES[k].msg : k) + '</span><b>×' + n + '</b></div>').join('')
       : '<div class="ri"><span>本次没有明显动作问题 👏</span></div>';
     $('#btn-replay').hidden = T.clip.length < 8;          // 帧数太少不值得回放
+    checkGoal();
+    go('result');
+    sfx.finish();
+  }
+  function checkGoal() {
     const goal = DB.set.dailyGoal | 0;
     if (goal && todayPoints() >= goal && DB.goalDay !== dayStart(Date.now())) {
       DB.goalDay = dayStart(Date.now()); save();
       setTimeout(() => { toast('🎯 今日目标达成！'); speak('恭喜，达成今日目标', true); }, 900);
     }
-    go('result');
-    sfx.finish();
   }
   let LAST_REC = null;
-  $('#btn-again').onclick = () => openTrain(T.ex ? T.ex.id : 'squat');
+  $('#btn-again').onclick = () => {
+    if (T.seq) { startCircuit(T.seq.map(e => e.id)); return; }   // 循环整轮再来一遍
+    openTrain(T.ex ? T.ex.id : 'squat');
+  };
+
+  /* ---------------- 循环训练（circuit） ---------------- */
+  const CIR_DEFAULT = ['squat', 'jack', 'highknees', 'headshake'];
+  $('#btn-circuit').onclick = () => { renderCircuitPicker(); $('#modal-circuit').hidden = false; };
+  function renderCircuitPicker() {
+    const list = X.EXERCISES.filter(e => e.free || DB.pro);
+    $('#cir-chips').innerHTML = list.map(e =>
+      '<label class="cir-chip' + (CIR_DEFAULT.includes(e.id) ? ' on' : '') + '">' +
+      '<input type="checkbox" value="' + e.id + '"' + (CIR_DEFAULT.includes(e.id) ? ' checked' : '') + '>' +
+      e.ico + ' ' + e.name + '</label>').join('');
+    $('#btn-cir-start').textContent = '开始循环（' + CIR_DEFAULT.length + ' 动作）';
+  }
+  $('#cir-chips').addEventListener('change', e => {
+    const lab = e.target.closest('.cir-chip'); if (!lab) return;
+    lab.classList.toggle('on', e.target.checked);
+    const n = $$('#cir-chips input:checked').length;
+    $('#btn-cir-start').textContent = n ? '开始循环（' + n + ' 动作）' : '开始循环';
+  });
+  $('#btn-cir-start').onclick = () => {
+    const ids = $$('#cir-chips input:checked').map(i => i.value);
+    if (ids.length < 2 || ids.length > 6) { toast('请选 2–6 个动作'); return; }
+    startCircuit(ids);
+  };
+  function startCircuit(ids) {
+    const seq = ids.map(findEx).filter(Boolean);
+    if (seq.length < 2) { toast('请至少选 2 个动作'); return; }
+    if (!DB.pro && quotaUsed() >= FREE_QUOTA) { openPro('本月免费训练次数已用完，升级 Pro 不限次'); return; }
+    const first = seq[0];
+    Object.assign(T, { ex: first, tracker: X.makeTracker(first.id), phase: 'setup', setIdx: 0, validSet: 0, validTot: 0,
+      attempts: 0, issues: {}, timeSec: 0, badSec: 0, activeMs: 0, poseOkMs: 0, liveAt: {}, fbAt: {},
+      clip: [], clipNext: 0, clipSize: null, seq, seqIdx: 0, circuitStats: [] });
+    $('#modal-circuit').hidden = true;
+    go('train');
+    state.lastHands = null;
+    $('#hud').hidden = true; $('#mask-rest').hidden = true;
+    fillTrainChrome(first);
+    $('#setup-title').textContent += ' · 循环 1 / ' + seq.length;
+    $('#mask-setup').hidden = false;
+    startTipRotator();
+    bootPreview();
+    if (seq.some(e => e.hands)) ensureHandEngine().catch(() => {});   // 含手指级动作时预热手部模型
+  }
+  function advanceCircuit() {
+    T.circuitStats.push(saveResult());          // 每个动作各写一条历史记录
+    T.seqIdx++;
+    if (T.seqIdx >= T.seq.length) { showCircuitResult(); return; }
+    const next = T.seq[T.seqIdx];
+    $('#mask-rest').hidden = false;
+    $('#rest-txt').textContent = '循环第 ' + (T.seqIdx + 1) + ' / ' + T.seq.length + ' 个：' + next.name +
+      (next.seated ? '（坐姿）' : (next.view === 'side' ? '（侧面机位）' : ''));
+    let sec = 10;
+    $('#rest-num').textContent = sec;
+    speak('下一个动作，' + next.name, true);
+    const iv = setInterval(() => {
+      if (T.phase !== 'rest') { clearInterval(iv); return; }
+      sec--; $('#rest-num').textContent = sec; sfx.tick();
+      if (sec <= 0) { clearInterval(iv); $('#mask-rest').hidden = true; setupCircuitLeg(next); }
+    }, 1000);
+  }
+  function setupCircuitLeg(ex) {
+    Object.assign(T, { ex, tracker: X.makeTracker(ex.id), setIdx: 0, validSet: 0, validTot: 0, attempts: 0,
+      issues: {}, timeSec: 0, badSec: 0, activeMs: 0, poseOkMs: 0, liveAt: {}, fbAt: {},
+      clip: [], clipNext: 0, clipSize: null });
+    fillTrainChrome(ex);
+    T.phase = 'calib';
+    $('#hud').hidden = true;
+    $('#calib-txt').textContent = '请摆好起始姿势：' + calibHint(ex);
+    $('#calib-ico').className = 'calib-ico';
+    $('#mask-calib').hidden = false;
+    if (ex.hands && !state.handEngine) ensureHandEngine().catch(() => {});
+    setHud();
+    feedback('本轮：' + ex.name + ' × ' + (ex.mode === 'time' ? ex.target + ' 秒' : ex.target), 'good', 'cir' + T.seqIdx, true);
+  }
+  function showCircuitResult() {
+    stopLoop(); stopTipRotator(); T.phase = 'off';
+    $('#hud').hidden = true; $('#mask-calib').hidden = true; $('#mask-rest').hidden = true;
+    const st = T.circuitStats;
+    const totValid = st.reduce((a, r) => a + r.valid, 0);
+    const totBad = st.reduce((a, r) => a + (r.mode === 'time' ? 0 : Math.max(0, r.attempts - r.valid)), 0);
+    const totSecs = st.reduce((a, r) => a + r.secs, 0);
+    const totCal = +st.reduce((a, r) => a + r.cal, 0).toFixed(1);
+    const score = Math.round(st.reduce((a, r) => a + r.score * Math.max(1, r.secs), 0) / Math.max(1, totSecs));
+    const merged = {};
+    st.forEach(r => Object.entries(r.issues || {}).forEach(([k, v]) => merged[k] = (merged[k] || 0) + v));
+    LAST_REC = { ts: Date.now(), ex: 'circuit', name: '循环训练', mode: 'reps',
+      valid: totValid, attempts: totValid + totBad, secs: totSecs, cal: totCal, score, issues: merged };
+    $('#res-emoji').textContent = '🔁';
+    $('#res-title').textContent = '循环打完！' + st.length + ' 个动作全部完成' + (score >= 85 ? '，动作在线 💪' : '，质量为王 🔥');
+    $('#res-score').textContent = score;
+    $('#res-reps').textContent = totValid;
+    $('#res-bad').textContent = totBad;
+    $('#res-dur').textContent = totSecs + 's';
+    $('#res-cal').textContent = totCal;
+    const iss = Object.entries(merged).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    $('#res-issues').innerHTML = '<div class="ri"><span>' +
+      st.map(r => r.name + ' ' + (r.mode === 'time' ? r.valid + 's' : r.valid + '次')).join(' · ') + '</span></div>' +
+      (iss.length ? iss.map(([k, n]) => '<div class="ri"><span>' + (X.ISSUES[k] ? X.ISSUES[k].msg : k) + '</span><b>×' + n + '</b></div>').join('')
+                  : '<div class="ri"><span>本轮没有明显动作问题 👏</span>');
+    $('#btn-replay').hidden = true;                // 循环回放暂不展示（clip 仅末段）
+    checkGoal();
+    go('result'); sfx.finish();
+  }
 
   /* ---------------- 组回放（火柴人序列，非视频） ---------------- */
   const RP = { raf: null, i: 0, clock: 0, lastNow: 0, speed: 1, paused: false };
@@ -613,7 +728,7 @@
     g.fillStyle = '#8db4e8'; g.font = '600 34px system-ui'; g.fillText('◉ 动镜 DongJing', 360, 96);
     g.fillStyle = '#5c7aa6'; g.font = '20px system-ui'; g.fillText('网页 AI 体感私教 · 只计标准有效次数', 360, 132);
     const ex = X.EXERCISES.find(e => e.id === rec.ex);
-    g.font = '72px serif'; g.fillText((ex && ex.ico) || '💪', 360, 640);
+    g.font = '72px serif'; g.fillText(rec.ex === 'circuit' ? '🔁' : (ex && ex.ico) || '💪', 360, 640);
     g.fillStyle = '#fff'; g.font = 'bold 118px system-ui';
     g.fillText(rec.mode === 'time' ? rec.valid + 's' : String(rec.valid), 360, 782);
     g.fillStyle = '#8db4e8'; g.font = '26px system-ui';
@@ -820,11 +935,11 @@
 
   /* ---------------- 启动 ---------------- */
   renderHome(); renderMe(); refreshChip();
-  window.__dongjing = { state, DB };   // 调试句柄：控制台可读 lastLm/visibility 做远程诊断
+  window.__dongjing = { state, DB, T };   // 调试句柄：控制台可读 lastLm/训练状态做远程诊断
   document.addEventListener('keydown', e => {
     const openModal = $$('.modal').find(m => !m.hidden);
     if (e.key === 'Escape' && openModal) { openModal.hidden = true; return; }
-    if (e.key === 'Escape' && curScreen === 'train' && (T.validTot || T.attempts || T.timeSec)) { endTrain(true); }
+    if (e.key === 'Escape' && curScreen === 'train' && (T.validTot || T.attempts || T.timeSec)) { endTrain('save'); go('home'); toast('已保存本次成绩并退出'); }
     else if (e.key === 'Escape' && curScreen === 'train') go('home');
   });
 })();

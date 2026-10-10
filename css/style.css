@@ -219,6 +219,13 @@ h3{font-size:18px}
 .replay-ctrls{display:flex; gap:10px; align-items:center; justify-content:center; margin-top:6px}
 .replay-ctrls .btn{padding:7px 16px; font-size:13px}
 
+/* ---- 循环训练选择 chips ---- */
+.cir-chips{display:flex; flex-wrap:wrap; gap:8px; margin:14px 0}
+.cir-chip{display:inline-flex; align-items:center; gap:4px; padding:7px 14px; border-radius:20px; border:1px solid #2a3c58; background:#12203a; color:var(--muted); cursor:pointer; font-size:14px; user-select:none; transition:.15s}
+.cir-chip:hover{border-color:#3d5a86}
+.cir-chip.on{border-color:#39d98a; color:#eafaf2; background:#14302a}
+.cir-chip input{display:none}
+
 /* ---- 响应式 ---- */
 @media (max-width:900px){
   .hero{grid-template-columns:1fr}
