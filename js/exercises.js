@@ -55,6 +55,7 @@
     pkPike:    { msg: '屁股别撅太高', severe: false },
     wvUp:      { msg: '把手举过肩再挥', severe: false },
     hsSmall:   { msg: '摇头幅度再大一点', severe: false },
+    sgLow:     { msg: '肩膀往耳朵方向耸得更高', severe: false },
     grFind:    { msg: '把手举进画面（胸前到头顶之间）', severe: false },
     grHalf:    { msg: '手指要完全张开', severe: false }
   };
@@ -352,6 +353,32 @@
     };
   }
 
+  /* 耸肩放松：肩中心相对头部上提 → 回落 = 1 次；基准线慢速追踪，自适应机位高度 */
+  function shrugTracker() {
+    const L = LAND;
+    let base = null, up = false, maxLift = 0, goodAt = 0;
+    return {
+      feed(l, t, dt) {
+        const sMid = mid(l[L.L_SHO], l[L.R_SHO]);
+        const hMid = mid(l[L.L_EAR], l[L.R_EAR]);
+        const sw = Math.max(30, Math.abs(l[L.L_SHO].x - l[L.R_SHO].x));
+        const d = sMid.y - hMid.y;                    // 肩到头的距离：耸肩时变小
+        base = (base == null) ? d : Math.max(d, base - sw * 0.00002 * dt);   // 松弛位最高点缓慢追踪（随坐姿/机位漂移）
+        const lift = base - d;
+        maxLift = Math.max(maxLift, lift / sw);
+        const live = [];
+        if (t - goodAt > 6000 && maxLift < 0.08) live.push('sgLow');   // 6s 内幅度一直接不足 → 提示
+        let rep = null;
+        if (!up && lift > 0.12 * sw) { up = true; }
+        else if (up && lift < 0.04 * sw) {          // 耸起后完全放松回落才算一次
+          up = false; goodAt = t; maxLift = 0;
+          rep = { valid: true, issues: [] };
+        }
+        return { phase: up ? '保持一下…放松回落' : '耸肩 → 放松', live, rep };
+      }
+    };
+  }
+
   function uniq(arr) { return [...new Set(arr)]; }
 
   /* ================= 动作元数据 ================= */
@@ -400,6 +427,15 @@
       tips: ['手举过肩线以上再挥', '左右摆动幅度要大（超过一个肩宽）', '左右手都可，鼓励交替', '手放下不计次，重新举起'],
       keys: [0, 11, 12, 15, 16],
       start: l => l[15].y > l[11].y && l[16].y > l[12].y
+    },
+    {
+      id: 'shrug', name: '耸肩放松', ico: '🤸', view: 'front', seated: true, free: true, diff: 1,
+      mode: 'reps', target: 15, sets: 2, met: 1.8,
+      desc: '斜方肌解压，一分钟肩颈回春',
+      setup: '坐着即可，头部到肩膀完整入镜，光线照在脸上。',
+      tips: ['双肩缓缓往耳朵方向耸起', '顶部停一拍再完全放松落下', '落下时肩膀落到最低点', '呼吸自然，不要憋气'],
+      keys: [0, 11, 12],
+      start: () => true
     },
     {
       id: 'grasp', name: '手掌抓握', ico: '✊', view: 'front', seated: true, free: false, diff: 1,
@@ -496,7 +532,8 @@
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,
-               headshake: headshakeTracker, wave: waveTracker, grasp: graspTracker }[id]();
+               headshake: headshakeTracker, wave: waveTracker, grasp: graspTracker,
+               shrug: shrugTracker }[id]();
     }
   };
 })();

@@ -109,12 +109,43 @@ function mkHand(tipDist) {
   if (reps2 !== 0) process.exit(1);
 }
 
-/* --- 元数据完整性：9 动作、keys/start 均存在，新动作 seated --- */
+/* --- 耸肩：耳 y=100，肩基线 y=200，sw=100；耸到 183（lift=17>12）→ 回 206 = 1 次 --- */
+{
+  let reps = 0, tt = 0;
+  const t = X.makeTracker('shrug');
+  const feed = (sy) => { tt += 100; const l = mkL();
+    l[7] = { x: 340, y: 100, v: 1 }; l[8] = { x: 360, y: 100, v: 1 };
+    l[11] = { x: 300, y: sy, v: 1 }; l[12] = { x: 400, y: sy, v: 1 };
+    const r = t.feed(l, tt, 100); if (r.rep) reps++; return r; };
+  for (let i = 0; i < 3; i++) { feed(200); feed(200); feed(183); feed(183); feed(206); feed(206); }
+  console.log('[耸肩] reps =', reps, '(期望 3)');
+  if (reps !== 3) process.exit(1);
+}
+
+/* --- 耸肩小幅（lift≈6 < 12）：0 次 + sgLow 提示 --- */
+{
+  let reps = 0, warned = false, tt = 6000;
+  const t = X.makeTracker('shrug');
+  for (let i = 0; i < 40; i++) {
+    tt += 100;
+    const l = mkL();
+    l[7] = { x: 340, y: 100, v: 1 }; l[8] = { x: 360, y: 100, v: 1 };
+    const sy = i % 4 < 2 ? 200 : 194;
+    l[11] = { x: 300, y: sy, v: 1 }; l[12] = { x: 400, y: sy, v: 1 };
+    const r = t.feed(l, tt, 100);
+    if (r.rep) reps++;
+    if (r.live.includes('sgLow')) warned = true;
+  }
+  console.log('[耸肩小幅] reps =', reps, '(期望 0) 幅度提示 =', warned);
+  if (reps !== 0 || !warned) process.exit(1);
+}
+
+/* --- 元数据完整性：10 动作、keys/start 均存在，坐姿系标记 --- */
 {
   const ids = X.EXERCISES.map(e => e.id);
   console.log('[元数据] 动作数 =', ids.length, ids.join(','));
-  if (ids.length !== 9) process.exit(1);
-  ['headshake', 'wave', 'grasp'].forEach(id => {
+  if (ids.length !== 10) process.exit(1);
+  ['headshake', 'wave', 'grasp', 'shrug'].forEach(id => {
     const e = X.EXERCISES.find(x => x.id === id);
     if (!e.seated || typeof e.start !== 'function' || !e.keys.length) { console.log('元数据缺项', id); process.exit(1); }
   });

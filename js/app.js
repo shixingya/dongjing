@@ -11,11 +11,14 @@
 
   /* ---------------- 存储 ---------------- */
   const KEY = 'dongjing_v1';
-  const DEF = { records: [], posture: [], quota: { month: '', used: 0 }, set: { voice: true, sfx: true, mirror: true, weight: 60 }, pro: false };
+  const DEF = { records: [], posture: [], quota: { month: '', used: 0 }, set: { voice: true, sfx: true, mirror: true, weight: 60, dailyGoal: 30 }, pro: false };
   let DB = load();
   function load() {
-    try { return Object.assign({}, DEF, JSON.parse(localStorage.getItem(KEY) || '{}')); }
-    catch (e) { return JSON.parse(JSON.stringify(DEF)); }
+    try {
+      const o = Object.assign({}, DEF, JSON.parse(localStorage.getItem(KEY) || '{}'));
+      o.set = Object.assign({}, DEF.set, o.set || {});   // 旧数据补齐新增设置项（dailyGoal 等）
+      return o;
+    } catch (e) { return JSON.parse(JSON.stringify(DEF)); }
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) {} }
   const monthKey = () => { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1); };
@@ -259,7 +262,7 @@
     ex: null, tracker: null, phase: 'off',       // off|setup|calib|live|rest|done
     setIdx: 0, validSet: 0, validTot: 0, attempts: 0,
     issues: {}, timeSec: 0, badSec: 0, activeMs: 0, poseOkMs: 0,
-    liveAt: {}, fbAt: {}
+    liveAt: {}, fbAt: {}, clip: [], clipNext: 0, clipSize: null
   };
   function findEx(id) { return X.EXERCISES.find(e => e.id === id); }
 
@@ -269,7 +272,8 @@
     if (!ex.free && !DB.pro) { openPro('「' + ex.name + '」是 Pro 动作，升级后不限次练习'); return; }
     if (!DB.pro && quotaUsed() >= FREE_QUOTA) { openPro('本月免费训练次数已用完，升级 Pro 不限次'); return; }
     Object.assign(T, { ex, tracker: X.makeTracker(id), phase: 'setup', setIdx: 0, validSet: 0, validTot: 0,
-      attempts: 0, issues: {}, timeSec: 0, badSec: 0, activeMs: 0, poseOkMs: 0, liveAt: {}, fbAt: {} });
+      attempts: 0, issues: {}, timeSec: 0, badSec: 0, activeMs: 0, poseOkMs: 0, liveAt: {}, fbAt: {},
+      clip: [], clipNext: 0, clipSize: null });
     go('train');
     state.lastHands = null;
     $('#hud').hidden = true; $('#mask-rest').hidden = true;
@@ -398,6 +402,13 @@
     T.activeMs += dt;
 
     const r = T.tracker.feed(lm, ts, dt, hands);
+    /* 回放采样：~11fps 关键点序列（非视频），只保留最近一组，供结果页火柴人回放 */
+    if (ts >= T.clipNext) {
+      T.clipNext = ts + 90;
+      if (!T.clipSize) T.clipSize = { w: $('#cam').videoWidth || 640, h: $('#cam').videoHeight || 480 };
+      T.clip.push({ t: ts, p: lm.map(q => ({ x: Math.round(q.x), y: Math.round(q.y), v: q.v })) });
+      if (T.clip.length > 400) T.clip.shift();
+    }
     $('#hud-phase').textContent = r.phase || '';
     /* 实时预警（不扣次数） */
     (r.live || []).forEach(k => {
@@ -444,7 +455,7 @@
   }
   function calibHint(ex) {
     return { squat: '自然站直', jack: '双脚并拢、双手垂放', highknees: '原地站直', pushup: '撑起手臂、身体一条直线', lunge: '自然站直', plank: '俯身撑好',
-      headshake: '坐在椅上身直目视镜头', wave: '双手垂放准备举起', grasp: '举起双手、张开五指' }[ex.id] || '站直';
+      headshake: '坐在椅上身直目视镜头', wave: '双手垂放准备举起', shrug: '双肩放松下垂', grasp: '举起双手、张开五指' }[ex.id] || '站直';
   }
   function bumpIssue(k, liveOnly) {
     T.issues[k] = (T.issues[k] || 0) + (liveOnly ? 0.34 : 1); // live 预警折算，避免刷屏虚高
@@ -463,6 +474,7 @@
       if (sec <= 0) {
         clearInterval(iv); $('#mask-rest').hidden = true;
         T.setIdx++; T.validSet = 0; T.tracker = X.makeTracker(T.ex.id);
+        T.clip = []; T.clipNext = 0; T.clipSize = null;      // 回放只留当前组
         if (T.ex.mode === 'time') T.timeSec = 0;
         T.phase = 'live'; setHud();
         feedback('开始第 ' + (T.setIdx + 1) + ' 组！', 'good', 'set' + T.setIdx, true);
@@ -500,6 +512,7 @@
   }
 
   function showResult(rec) {
+    LAST_REC = rec;
     $('#res-title').textContent = rec.score >= 85 ? '漂亮！动作很标准 💪' : rec.score >= 60 ? '完成！注意动作质量 🔥' : '完成！先把动作做对再冲量 🧱';
     $('#res-emoji').textContent = rec.score >= 85 ? '🏆' : '💪';
     $('#res-score').textContent = rec.score;
@@ -511,10 +524,125 @@
     $('#res-issues').innerHTML = iss.length
       ? iss.map(([k, n]) => '<div class="ri"><span>' + (X.ISSUES[k] ? X.ISSUES[k].msg : k) + '</span><b>×' + n + '</b></div>').join('')
       : '<div class="ri"><span>本次没有明显动作问题 👏</span></div>';
+    $('#btn-replay').hidden = T.clip.length < 8;          // 帧数太少不值得回放
+    const goal = DB.set.dailyGoal | 0;
+    if (goal && todayPoints() >= goal && DB.goalDay !== dayStart(Date.now())) {
+      DB.goalDay = dayStart(Date.now()); save();
+      setTimeout(() => { toast('🎯 今日目标达成！'); speak('恭喜，达成今日目标', true); }, 900);
+    }
     go('result');
     sfx.finish();
   }
+  let LAST_REC = null;
   $('#btn-again').onclick = () => openTrain(T.ex ? T.ex.id : 'squat');
+
+  /* ---------------- 组回放（火柴人序列，非视频） ---------------- */
+  const RP = { raf: null, i: 0, clock: 0, lastNow: 0, speed: 1, paused: false };
+  $('#btn-replay').onclick = openReplay;
+  function openReplay() {
+    if (T.clip.length < 8) return;
+    $('#replay-name').textContent = T.ex ? T.ex.name : '';
+    const c = $('#replay-canvas');
+    c.width = (T.clipSize && T.clipSize.w) || 640;
+    c.height = (T.clipSize && T.clipSize.h) || 480;
+    Object.assign(RP, { i: 0, clock: 0, lastNow: 0, speed: 1, paused: false });
+    $('#btn-rp-speed').textContent = '1x'; $('#btn-rp-pause').textContent = '⏸ 暂停';
+    $('#modal-replay').hidden = false;
+    if (RP.raf) cancelAnimationFrame(RP.raf);
+    rpTick();
+  }
+  function rpTick() {
+    RP.raf = requestAnimationFrame(rpTick);
+    if ($('#modal-replay').hidden) { cancelAnimationFrame(RP.raf); RP.raf = null; return; }
+    const now = performance.now(), d = Math.min(120, now - (RP.lastNow || now)); RP.lastNow = now;
+    if (!RP.paused) RP.clock += d * RP.speed;
+    const fr = T.clip; if (fr.length < 2) return;
+    const total = fr[fr.length - 1].t - fr[0].t;
+    while (RP.i + 1 < fr.length && fr[RP.i + 1].t - fr[0].t <= RP.clock) RP.i++;
+    drawStick($('#replay-canvas'), fr[RP.i].p);
+    $('#rp-time').textContent = (Math.min(RP.clock, total) / 1000).toFixed(1) + ' / ' + (total / 1000).toFixed(1) + 's';
+    if (RP.clock >= total + 400) { RP.clock = 0; RP.i = 0; }   // 循环播放
+  }
+  function drawStick(canvas, lm) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(57,217,138,.95)';
+    ctx.shadowColor = 'rgba(57,217,138,.5)'; ctx.shadowBlur = 6;
+    BONES.forEach(([a, b]) => {
+      const pa = lm[a], pb = lm[b];
+      if (!pa || !pb || pa.v < 0.1 || pb.v < 0.1) return;
+      ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+    });
+    ctx.shadowBlur = 0; ctx.fillStyle = '#cfe9ff';
+    lm.forEach((p, i) => { if (i > 28 || p.v < 0.1) return; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, 7); ctx.fill(); });
+  }
+  $('#btn-rp-pause').onclick = () => { RP.paused = !RP.paused; $('#btn-rp-pause').textContent = RP.paused ? '▶ 播放' : '⏸ 暂停'; };
+  $('#btn-rp-speed').onclick = () => { RP.speed = RP.speed === 1 ? 2 : RP.speed === 2 ? 0.5 : 1; $('#btn-rp-speed').textContent = RP.speed + 'x'; };
+
+  /* ---------------- 成绩分享海报（canvas 生成，无后端） ---------------- */
+  $('#btn-share').onclick = () => { if (LAST_REC) { buildPoster(LAST_REC); $('#modal-share').hidden = false; } };
+  function roundRect(g, x, y, w, h, r) {
+    g.beginPath(); g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+  }
+  function buildPoster(rec) {
+    const c = $('#share-canvas'); c.width = 720; c.height = 1080;
+    const g = c.getContext('2d');
+    const bg = g.createLinearGradient(0, 0, 720, 1080);
+    bg.addColorStop(0, '#0c1626'); bg.addColorStop(.55, '#10203a'); bg.addColorStop(1, '#0c1626');
+    g.fillStyle = bg; g.fillRect(0, 0, 720, 1080);
+    const glow = g.createRadialGradient(360, 340, 20, 360, 340, 460);
+    glow.addColorStop(0, 'rgba(57,217,138,.15)'); glow.addColorStop(1, 'rgba(57,217,138,0)');
+    g.fillStyle = glow; g.fillRect(0, 60, 720, 640);
+    /* 骨架火柴人装饰：本组最后一帧 */
+    if (T.clip.length) {
+      const fr = T.clip[T.clip.length - 1];
+      const sc = 720 / ((T.clipSize && T.clipSize.w) || 1280);
+      g.save(); g.translate(0, 150); g.scale(sc * 1.1, sc * 1.1); g.globalAlpha = .34;
+      g.lineWidth = 5; g.strokeStyle = '#39d98a';
+      g.shadowColor = 'rgba(57,217,138,.6)'; g.shadowBlur = 10;
+      BONES.forEach(([a, b]) => {
+        const pa = fr.p[a], pb = fr.p[b];
+        if (!pa || !pb || pa.v < 0.1 || pb.v < 0.1) return;
+        g.beginPath(); g.moveTo(pa.x, pa.y); g.lineTo(pb.x, pb.y); g.stroke();
+      });
+      g.restore();
+    }
+    g.textAlign = 'center';
+    g.fillStyle = '#8db4e8'; g.font = '600 34px system-ui'; g.fillText('◉ 动镜 DongJing', 360, 96);
+    g.fillStyle = '#5c7aa6'; g.font = '20px system-ui'; g.fillText('网页 AI 体感私教 · 只计标准有效次数', 360, 132);
+    const ex = X.EXERCISES.find(e => e.id === rec.ex);
+    g.font = '72px serif'; g.fillText((ex && ex.ico) || '💪', 360, 640);
+    g.fillStyle = '#fff'; g.font = 'bold 118px system-ui';
+    g.fillText(rec.mode === 'time' ? rec.valid + 's' : String(rec.valid), 360, 782);
+    g.fillStyle = '#8db4e8'; g.font = '26px system-ui';
+    g.fillText((rec.name || '') + ' · 标准有效' + (rec.mode === 'time' ? '时长' : '次数'), 360, 822);
+    [['动作评分', rec.score], ['千卡', rec.cal], ['时长', rec.secs + 's']].forEach((it, i) => {
+      const x = 140 + i * 220;
+      g.fillStyle = 'rgba(255,255,255,.06)'; roundRect(g, x - 92, 856, 184, 108, 16); g.fill();
+      g.fillStyle = '#39d98a'; g.font = 'bold 40px system-ui'; g.fillText(String(it[1]), x, 914);
+      g.fillStyle = '#7d99c4'; g.font = '20px system-ui'; g.fillText(String(it[0]), x, 948);
+    });
+    g.fillStyle = '#ffc94d'; g.font = '24px system-ui';
+    g.fillText('🔥 连续打卡 ' + streakDays() + ' 天 · 本周训练 ' + weekSessions() + ' 次', 360, 1006);
+    g.fillStyle = '#e6f0ff'; g.font = '600 26px system-ui'; g.fillText('打开摄像头，马上就能练', 360, 1042);
+    g.fillStyle = '#5c7aa6'; g.font = '19px system-ui';
+    g.fillText('shixingya.github.io/dongjing · ' + fmtDate(rec.ts), 360, 1070);
+  }
+  $('#btn-save-img').onclick = () => {
+    const a = document.createElement('a');
+    a.download = 'dongjing_' + (LAST_REC ? LAST_REC.ex + '_' + LAST_REC.score : 'result') + '.png';
+    a.href = $('#share-canvas').toDataURL('image/png'); a.click();
+    toast('图片已保存');
+  };
+  $('#btn-copy-img').onclick = async () => {
+    try {
+      const blob = await new Promise(r => $('#share-canvas').toBlob(r, 'image/png'));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      toast('已复制到剪贴板，去粘贴吧 ✦');
+    } catch (e) { toast('当前浏览器不支持复制图片，请用「保存图片」'); }
+  };
 
   /* 训练侧栏小贴士轮播 */
   const TIPS = [
@@ -592,6 +720,7 @@
     $('#hs-week').textContent = weekSessions();
     $('#hs-reps').textContent = weekValidReps();
     $('#hs-days').textContent = streakDays();
+    renderGoal();
     refreshChip();
   }
 
@@ -611,6 +740,20 @@
     if (!days.has(d)) d -= 864e5;                     // 今天没练则从昨天起算
     while (days.has(d)) { n++; d -= 864e5; }
     return n;
+  }
+  /* 训练点：计次动作 1 有效次=1 点，计时动作每 10s=1 点 */
+  function todayPoints() {
+    const s = dayStart(Date.now());
+    return DB.records.filter(r => r.ts >= s)
+      .reduce((a, r) => a + (r.mode === 'time' ? Math.round(r.valid / 10) : r.valid), 0);
+  }
+  function renderGoal() {
+    const goal = DB.set.dailyGoal | 0, p = todayPoints();
+    const ring = $('#goal-ring'); if (!ring) return;
+    const ratio = goal ? Math.min(1, p / goal) : 1;
+    ring.style.strokeDashoffset = String(163.4 * (1 - ratio));
+    $('#goal-num').textContent = goal ? (p >= goal ? '✓' : Math.round(ratio * 100) + '%') : '∞';
+    $('#goal-txt').textContent = goal ? (p >= goal ? '今日目标达成 🎉' : '今日 ' + p + '/' + goal + ' 点') : '未设每日目标';
   }
 
   /* ---------------- 报告页 ---------------- */
@@ -643,9 +786,10 @@
   function renderMe() {
     $('#me-plan').innerHTML = DB.pro ? '<span class="plan-badge pro">动镜 Pro ✦</span>' : '<span class="plan-badge free">免费版</span>';
     $('#me-quota').textContent = DB.pro ? '全部动作 · 不限训练次数'
-      : '本月已训练 ' + quotaUsed() + ' / ' + FREE_QUOTA + ' 次 · 基础 3 动作免费';
+      : '本月已训练 ' + quotaUsed() + ' / ' + FREE_QUOTA + ' 次 · 基础 6 动作免费（含坐姿系）';
     $('#chk-demo-pro').checked = !!DB.pro;
     $('#inp-weight').value = DB.set.weight;
+    $('#inp-goal').value = DB.set.dailyGoal;
     $('#chk-voice2').checked = DB.set.voice;
     $('#btn-voice').textContent = DB.set.voice ? '🔊' : '🔇';
     $('#chk-sfx').checked = DB.set.sfx;
@@ -655,8 +799,8 @@
     $('#modal-pro').querySelector('p.muted').textContent = (reason || '') + ' 解锁全部动作 · 不限次数 · 体态趋势 · 报表详情';
     $('#modal-pro').hidden = false;
   }
-  $$('[data-close]').forEach(b => b.onclick = () => $('#modal-pro').hidden = true);
-  $('#modal-pro').addEventListener('click', e => { if (e.target.id === 'modal-pro') $('#modal-pro').hidden = true; });
+  $$('[data-close]').forEach(b => b.onclick = () => { const m = b.closest('.modal'); if (m) m.hidden = true; });
+  $$('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.hidden = true; }));
   $('#btn-pro-demo').onclick = () => {
     DB.pro = true; save(); $('#modal-pro').hidden = true; renderHome(); renderMe();
     toast('已本地激活 Pro（演示模式，支付通道 P1 接入）');
@@ -664,6 +808,10 @@
   $('#btn-upgrade').onclick = () => openPro(DB.pro ? '你已在演示 Pro 状态' : '升级 Pro');
   $('#chk-demo-pro').onchange = e => { DB.pro = e.target.checked; save(); renderMe(); renderHome(); toast(DB.pro ? '演示 Pro 已激活' : '已切回免费版'); };
   $('#inp-weight').onchange = e => { DB.set.weight = Math.min(200, Math.max(30, +e.target.value || 60)); save(); };
+  $('#inp-goal').onchange = e => {
+    DB.set.dailyGoal = Math.min(500, Math.max(0, +e.target.value || 0)); save();
+    renderGoal(); toast(DB.set.dailyGoal ? '每日目标已设为 ' + DB.set.dailyGoal + ' 训练点' : '每日目标已关闭');
+  };
   const bindSet = (sel, key, cb) => { $(sel).onchange = e => { DB.set[key] = e.target.checked; save(); if (cb) cb(e.target.checked); }; };
   bindSet('#chk-voice2', 'voice', v => { $('#btn-voice').textContent = v ? '🔊' : '🔇'; if (!v) window.speechSynthesis && speechSynthesis.cancel(); });
   bindSet('#chk-sfx', 'sfx');
@@ -674,7 +822,8 @@
   renderHome(); renderMe(); refreshChip();
   window.__dongjing = { state, DB };   // 调试句柄：控制台可读 lastLm/visibility 做远程诊断
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && !$('#modal-pro').hidden) $('#modal-pro').hidden = true;
+    const openModal = $$('.modal').find(m => !m.hidden);
+    if (e.key === 'Escape' && openModal) { openModal.hidden = true; return; }
     if (e.key === 'Escape' && curScreen === 'train' && (T.validTot || T.attempts || T.timeSec)) { endTrain(true); }
     else if (e.key === 'Escape' && curScreen === 'train') go('home');
   });
