@@ -171,7 +171,11 @@
   }
   function toPixels(lms, video) {
     if (!lms || !lms.length) return null;
-    return lms.map(p => ({ x: p.x * video.videoWidth, y: p.y * video.videoHeight, v: p.visibility != null ? p.visibility : 1 }));
+    const out = lms.map(p => ({ x: p.x * video.videoWidth, y: p.y * video.videoHeight, v: p.visibility != null ? p.visibility : 1 }));
+    /* 关键兼容：pose_landmarker lite 在 VIDEO 模式下常把所有 visibility 返回 0，
+     * 但"检出了 landmarks"本身就意味着有人——此时整体回退为 1，否则骨架/校准全被可见度门槛误杀 */
+    if (out.every(p => p.v <= 0.05)) out.forEach(p => { p.v = 1; });
+    return out;
   }
   function toHands(res, video) {
     if (!res || !res.landmarks || !res.landmarks.length) return [];
@@ -193,13 +197,13 @@
     ctx.lineWidth = 3.5; ctx.strokeStyle = tint || 'rgba(57,217,138,.9)';
     ctx.shadowColor = 'rgba(57,217,138,.6)'; ctx.shadowBlur = 8;
     BONES.forEach(([a, b]) => {
-      const pa = lm[a], pb = lm[b];
-      if (!pa || !pb || pa.v < 0.4 || pb.v < 0.4) return;
+      const pa = lm && lm[a], pb = lm && lm[b];
+      if (!pa || !pb || pa.v < 0.1 || pb.v < 0.1) return;
       ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
     });
     ctx.fillStyle = '#fff';
     (lm || []).forEach((p, i) => {
-      if (i > 28 || p.v < 0.4) return;
+      if (i > 28 || p.v < 0.1) return;
       ctx.beginPath(); ctx.arc(p.x, p.y, i < 11 ? 2.5 : 4, 0, 7); ctx.fill();
     });
     /* 手部 21 点细节骨骼（抓握等手指级动作） */
@@ -230,7 +234,8 @@
       if (ts - lastDetectTs < 28) return;               // ~35fps 上限
       lastDetectTs = ts;
       let res;
-      try { res = state.engine.detectForVideo(video, ts); } catch (e) { return; }
+      try { res = state.engine.detectForVideo(video, ts); }
+      catch (e) { console.warn('[dongjing] detectForVideo 异常:', e); return; }
       const lm = toPixels(res.poseLandmarks && res.poseLandmarks.length ? res.poseLandmarks : null, video);
       state.lastLm = lm;
       /* 手指级动作：同帧跑 HandLandmarker，结果沿用到下一帧（隔帧降本） */
@@ -284,9 +289,17 @@
     try {
       await ensureCam();
       $('#cam').classList.toggle('no-mirror', !DB.set.mirror);
-      if (T.phase === 'setup') startLoop($('#cam'), $('#skel'), onTrainFrame);
+      if (T.phase === 'setup') {
+        const start = () => { if (T.phase === 'setup') startLoop($('#cam'), $('#skel'), onTrainFrame); };
+        if (state.engine) { start(); }
+        else {
+          const el = $('#setup-person');
+          el.textContent = '正在加载 AI 模型（首次约 5MB）…';
+          el.className = 'setup-hint';
+          ensureEngine().then(start).catch(() => {});
+        }
+      }
     } catch (e) { /* 失败不阻断，bootTrainStage 会统一引导 */ }
-    ensureEngine().catch(() => {});
   }
   $('#btn-setup-ok').onclick = bootTrainStage;
   $('#btn-retry-model').onclick = bootTrainStage;
@@ -659,6 +672,7 @@
 
   /* ---------------- 启动 ---------------- */
   renderHome(); renderMe(); refreshChip();
+  window.__dongjing = { state, DB };   // 调试句柄：控制台可读 lastLm/visibility 做远程诊断
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !$('#modal-pro').hidden) $('#modal-pro').hidden = true;
     if (e.key === 'Escape' && curScreen === 'train' && (T.validTot || T.attempts || T.timeSec)) { endTrain(true); }
