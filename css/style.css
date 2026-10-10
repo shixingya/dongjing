@@ -88,7 +88,11 @@ h3{font-size:18px}
 .stage video.no-mirror{transform:none}
 .stage canvas{pointer-events:none}
 .stage-mask{position:absolute; inset:0; background:rgba(6,10,16,.86); display:flex; align-items:center; justify-content:center; z-index:20; backdrop-filter:blur(3px)}
-.stage-mask.thin{background:rgba(6,10,16,.45)}
+.stage-mask.thin{background:rgba(6,10,16,.45); backdrop-filter:none}
+/* setup 引导卡沉底，画面中央留给灰色示范小人 */
+#mask-setup{align-items:flex-end; padding-bottom:20px}
+/* 校准提示置顶，不遮挡中央示范小人与高亮骨架 */
+#mask-calib{align-items:flex-start; padding-top:14px}
 .mask-box{max-width:420px; text-align:center; padding:20px}
 .mask-box p{color:var(--muted); margin:10px 0 18px; line-height:1.8; font-size:14px}
 .mask-ico{font-size:44px; margin-bottom:8px}

@@ -191,14 +191,77 @@
   /* 骨骼连线 */
   const BONES = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24],
     [23, 25], [25, 27], [24, 26], [26, 28], [0, 11], [0, 12], [27, 28]];
+  /* 示范小人模板（归一化坐标，按动作类型选站姿/坐姿/侧面俯撑） */
+  function ghostPose(ex) {
+    const P = Array.from({ length: 33 }, () => ({ x: 0, y: 0, v: 0 }));
+    const put = (i, x, y) => { P[i] = { x, y, v: 1 }; };
+    if (ex && ex.seated) {                       // 坐姿：手放膝上
+      put(0, .5, .2); put(7, .46, .19); put(8, .54, .19);
+      put(11, .43, .32); put(12, .57, .32);
+      put(13, .39, .43); put(14, .61, .43);
+      put(15, .43, .52); put(16, .57, .52);
+      put(23, .44, .56); put(24, .56, .56);
+      put(25, .42, .68); put(26, .58, .68);
+      put(27, .41, .8); put(28, .59, .8);
+    } else if (ex && ex.view === 'side') {       // 侧面：俯撑/平板姿态
+      put(0, .3, .24); put(7, .28, .23); put(8, .32, .23);
+      put(11, .4, .36); put(12, .42, .36);
+      put(13, .48, .48); put(14, .5, .48);
+      put(15, .54, .62); put(16, .56, .62);
+      put(23, .44, .56); put(24, .46, .56);
+      put(25, .6, .66); put(26, .62, .66);
+      put(27, .76, .78); put(28, .78, .78);
+    } else {                                     // 正面站立
+      put(0, .5, .13); put(7, .46, .12); put(8, .54, .12);
+      put(11, .42, .27); put(12, .58, .27);
+      put(13, .37, .39); put(14, .63, .39);
+      put(15, .34, .5); put(16, .66, .5);
+      put(23, .44, .53); put(24, .56, .53);
+      put(25, .43, .69); put(26, .57, .69);
+      put(27, .42, .86); put(28, .58, .86);
+    }
+    return P;
+  }
+  function drawGhost(canvas, tMs) {
+    const ctx = canvas.getContext('2d');
+    const P = ghostPose(T.ex);
+    const bob = Math.sin((tMs || 0) / 700) * 0.005;      // 轻微呼吸浮动，表明"我在等你"
+    ctx.save();
+    if (DB.set.mirror) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }   // 与镜像后的摄像头画面对齐
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(141,180,232,.45)';
+    ctx.shadowColor = 'rgba(141,180,232,.3)'; ctx.shadowBlur = 10;
+    BONES.forEach(([a, b]) => {
+      const pa = P[a], pb = P[b];
+      if (!pa.v || !pb.v) return;
+      ctx.beginPath();
+      ctx.moveTo(pa.x * canvas.width, (pa.y + bob) * canvas.height);
+      ctx.lineTo(pb.x * canvas.width, (pb.y + bob) * canvas.height);
+      ctx.stroke();
+    });
+    ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(207,233,255,.5)';
+    P.forEach((p, i) => {
+      if (!p.v || i > 28) return;
+      ctx.beginPath(); ctx.arc(p.x * canvas.width, (p.y + bob) * canvas.height, i < 11 ? 3.5 : 5, 0, 7); ctx.fill();
+    });
+    ctx.restore();
+  }
+  let flashAt = 0;            // 刚识别到人的高亮脉冲（示范小人 → 真实骨架的"点亮"瞬间）
   function drawSkel(canvas, lm, tint, hands) {
     const ctx = canvas.getContext('2d');
-    if (!lm && (!hands || !hands.length)) { ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
+    if (!lm && (!hands || !hands.length)) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      /* 未识到人：训练 setup/校准阶段画灰色示范小人占位；识到人后自然切换为绿色骨架"高亮"跟随 */
+      if (curScreen === 'train' && T.ex && (T.phase === 'setup' || T.phase === 'calib')) drawGhost(canvas, performance.now());
+      return;
+    }
+    const fl = performance.now() - flashAt < 700;      // 点亮瞬间加粗发光，之后回落常态
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     if (DB.set.mirror) { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
-    ctx.lineWidth = 3.5; ctx.strokeStyle = tint || 'rgba(57,217,138,.9)';
-    ctx.shadowColor = 'rgba(57,217,138,.6)'; ctx.shadowBlur = 8;
+    ctx.lineWidth = fl ? 6 : 3.5;
+    ctx.strokeStyle = tint || (fl ? '#a6ffd0' : 'rgba(57,217,138,.9)');
+    ctx.shadowColor = fl ? 'rgba(125,255,192,.95)' : 'rgba(57,217,138,.6)';
+    ctx.shadowBlur = fl ? 20 : 8;
     BONES.forEach(([a, b]) => {
       const pa = lm && lm[a], pb = lm && lm[b];
       if (!pa || !pb || pa.v < 0.1 || pb.v < 0.1) return;
@@ -240,6 +303,7 @@
       try { res = state.engine.detectForVideo(video, ts); }
       catch (e) { console.warn('[dongjing] detectForVideo 异常:', e); return; }
       const lm = toPixels(res.poseLandmarks && res.poseLandmarks.length ? res.poseLandmarks : null, video);
+      if (lm && !state.lastLm) flashAt = ts;            // 由"无人"变"有人"：触发一次高亮
       state.lastLm = lm;
       /* 手指级动作：同帧跑 HandLandmarker，结果沿用到下一帧（隔帧降本） */
       if (T.ex && T.ex.hands && (T.phase === 'live' || T.phase === 'calib') && state.handEngine) {
@@ -378,7 +442,7 @@
     if (T.phase === 'setup') {
       const ok = !!lm && X.visAll(lm, ex.keys);
       const el = $('#setup-person');
-      el.textContent = ok ? '✓ 已检测到人，骨架已跟上，点下方按钮继续' : (ex.seated ? '未检测到人：请正对镜头，上半身入镜' : '未检测到人：请调整机位，让全身入镜');
+      el.textContent = ok ? '✓ 已检测到人，骨架已亮起，点下方按钮继续' : (ex.seated ? '未检测到人：请对着灰色示范小人坐好，上半身入镜' : '未检测到人：请对着灰色示范小人站好，全身入镜');
       el.className = 'setup-hint' + (ok ? ' ok' : '');
       return;
     }
