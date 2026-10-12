@@ -230,6 +230,26 @@ h3{font-size:18px}
 .cir-chip.on{border-color:#39d98a; color:#eafaf2; background:#14302a}
 .cir-chip input{display:none}
 
+/* ---- 教练笔记（首页跨会话记忆） ---- */
+.coach-card{display:flex; gap:10px; align-items:flex-start; margin:4px 0 18px; padding:13px 16px; font-size:13.5px; color:var(--muted); line-height:1.75; border-left:3px solid #39d98a}
+.coach-card b{color:var(--hl); white-space:nowrap; font-size:13px}
+
+/* ---- 本次复盘（结果页） ---- */
+.review{margin:14px 0 4px; padding:13px 15px; border-radius:12px; background:rgba(57,217,138,.07); border:1px solid rgba(57,217,138,.22); text-align:left}
+.review .rv-h{color:var(--hl); font-size:13px; font-weight:600; margin-bottom:7px}
+.review .rv-l{color:var(--txt); font-size:13.5px; line-height:1.85}
+
+/* ---- AI 编排弹窗 ---- */
+#plan-text{width:100%; box-sizing:border-box; background:#0e1a2b; border:1px solid #2a3c58; border-radius:10px; color:var(--txt); padding:11px 13px; font-size:14px; font-family:inherit; resize:vertical; min-height:52px}
+#plan-text:focus{outline:none; border-color:#39d98a}
+.plan-out{margin-top:14px; padding:12px 14px; border-radius:12px; background:#0e1a2b; border:1px solid #24334d; text-align:left}
+.plan-steps{display:flex; flex-wrap:wrap; align-items:center; gap:6px}
+.pl-step{padding:5px 11px; border-radius:8px; background:#14302a; border:1px solid #2b5c46; color:#eafaf2; font-size:13px; white-space:nowrap}
+.plan-steps i{color:#4a648c; font-style:normal}
+.plan-meta{margin-top:10px; color:var(--hl); font-size:13px}
+.plan-why{margin-top:6px; color:var(--muted); font-size:12.5px; line-height:1.7}
+.plan-why .pw.lock{color:var(--warn)}
+
 /* ---- 响应式 ---- */
 @media (max-width:900px){
   .hero{grid-template-columns:1fr}

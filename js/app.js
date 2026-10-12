@@ -327,7 +327,7 @@
     setIdx: 0, validSet: 0, validTot: 0, attempts: 0,
     issues: {}, timeSec: 0, badSec: 0, activeMs: 0, poseOkMs: 0,
     liveAt: {}, fbAt: {}, clip: [], clipNext: 0, clipSize: null,
-    seq: null, seqIdx: 0, circuitStats: null     // 循环模式：动作序列/当前第几个/各动作成绩
+    seq: null, seqIdx: 0, circuitStats: null, briefed: {}   // 循环模式：动作序列/当前第几个/各动作成绩；briefed=教练记忆已提醒过的动作
   };
   function findEx(id) { return X.EXERCISES.find(e => e.id === id); }
 
@@ -338,7 +338,7 @@
     if (!DB.pro && quotaUsed() >= FREE_QUOTA) { openPro('本月免费训练次数已用完，升级 Pro 不限次'); return; }
     Object.assign(T, { ex, tracker: X.makeTracker(id), phase: 'setup', setIdx: 0, validSet: 0, validTot: 0,
       attempts: 0, issues: {}, timeSec: 0, badSec: 0, activeMs: 0, poseOkMs: 0, liveAt: {}, fbAt: {},
-      clip: [], clipNext: 0, clipSize: null, seq: null, seqIdx: 0, circuitStats: null });
+      clip: [], clipNext: 0, clipSize: null, seq: null, seqIdx: 0, circuitStats: null, briefed: {} });
     go('train');
     state.lastHands = null;
     $('#hud').hidden = true; $('#mask-rest').hidden = true;
@@ -463,6 +463,7 @@
           T.phase = 'live'; $('#mask-calib').hidden = true; $('#hud').hidden = false;
           if (!DB.pro && (!T.seq || T.seqIdx === 0)) { DB.quota = { month: monthKey(), used: quotaUsed() + 1 }; save(); refreshChip(); }   // 循环整轮只扣 1 次额度
           feedback('开始！目标 ' + (ex.mode === 'time' ? ex.target + ' 秒' : ex.target + ' 次'), 'good', 'start', true);
+          briefCoach(ex.id);                                    // 教练记忆：基于历史记录提醒老毛病
           setHud();
         }
       } else T.poseOkMs = 0;
@@ -573,7 +574,7 @@
     } else score = attempts ? Math.round(100 * valid / attempts) : 0;
     const mins = T.activeMs / 60000;
     const kcal = +(ex.met * DB.set.weight * mins).toFixed(1);
-    const rec = { ts: Date.now(), ex: ex.id, name: ex.name, mode: ex.mode,
+    const rec = { ts: Date.now(), ex: ex.id, name: ex.name, mode: ex.mode, target: ex.target,
       valid, attempts: ex.mode === 'time' ? valid : attempts, secs: Math.round(T.activeMs / 1000),
       cal: kcal, score, issues: Object.fromEntries(Object.entries(T.issues).map(([k, v]) => [k, Math.round(v)])) };
     DB.records.unshift(rec);
@@ -596,6 +597,8 @@
       ? iss.map(([k, n]) => '<div class="ri"><span>' + (X.ISSUES[k] ? X.ISSUES[k].msg : k) + '</span><b>×' + n + '</b></div>').join('')
       : '<div class="ri"><span>本次没有明显动作问题 👏</span></div>';
     $('#btn-replay').hidden = T.clip.length < 8;          // 帧数太少不值得回放
+    $('#res-review').hidden = true; $('#btn-review').hidden = true;
+    renderReview(rec);
     checkGoal();
     go('result');
     sfx.finish();
@@ -613,16 +616,114 @@
     openTrain(T.ex ? T.ex.id : 'squat');
   };
 
+  /* ---------------- 教练记忆（跨会话）+ 训练复盘 ----------------
+   * 学两个爆款经验：工具自己“记得上次怎么干的”（claude-mem），
+   * 干完活还会“复盘全过程讲清楚自己为什么这么做”（REA）。数据源就是本地历史记录。 */
+  const ISSUE_ADVICE = {
+    sqShallow: '下蹲前先做 5 次半蹲找幅度，感受髋低于膝',
+    sqValgus: '空蹲 2 组，找“膝盖对准脚尖”的感觉',
+    sqLean: '眼睛盯前方固定一点，胸椎先立起来再动',
+    puShallow: '改跪姿俯卧撑，先把幅度做满',
+    puSag: '先做平板支撑 30 秒 ×2 组唤醒核心，再回来做俯卧撑',
+    puPike: '放慢下放节奏，想象身体是一整块板',
+    jkArms: '先靠墙练手臂举过头顶的路径，再并脚步',
+    jkLegs: '先只做脚步开合不摆臂，熟练后合并',
+    lnShallow: '扶墙做小幅度弓步，站稳了再加深',
+    lnAsym: '心里默数“左一右一”控制交替节奏',
+    hkLow: '手扶墙做原地高抬腿，先单侧找过髋部的高度',
+    hkAlt: '速度降一半，保证左右交替不抢拍',
+    pkSlump: '平板分段做：20 秒 ×3，一塌腰就停',
+    pkPike: '注意力收到腹部与臀部，不要追时长',
+    wvUp: '先做 5 次完整举过肩的挥臂，不追速度',
+    hsSmall: '摇头时眼看肩膀方向，幅度自然就大',
+    sgLow: '吸气上提停 2 秒、呼气沉肩，把幅度拉开',
+    grFind: '双手举到下巴前 20cm，先张开五指再握',
+    grHalf: '先做 5 次“用力张手 3 秒”再进入节奏'
+  };
+  /* 近 N 天所有动作的问题聚合（用于首页教练笔记） */
+  function aggWeak(days) {
+    const from = dayStart(Date.now()) - (days - 1) * 864e5;
+    const m = {};
+    DB.records.filter(r => r.ts >= from).forEach(r =>
+      Object.entries(r.issues || {}).forEach(([k, v]) => { m[k] = (m[k] || 0) + v; }));
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  }
+  /* 某个动作的老毛病：取最近 15 次记录里出现最多且≥ 3 次的问题 */
+  function weaknessOf(exId) {
+    const recs = DB.records.filter(r => r.ex === exId).slice(0, 15);
+    if (recs.length < 2) return null;
+    const m = {};
+    recs.forEach(r => Object.entries(r.issues || {}).forEach(([k, v]) => { m[k] = (m[k] || 0) + v; }));
+    const top = Object.entries(m).sort((a, b) => b[1] - a[1])[0];
+    return top && top[1] >= 3 ? { key: top[0], msg: (X.ISSUES[top[0]] || {}).msg || top[0], n: Math.round(top[1]), sessions: recs.length } : null;
+  }
+  function briefCoach(exId) {         // 训练开始时一句针对性提醒（每组只说一次）
+    if (T.briefed[exId]) return;
+    T.briefed[exId] = 1;
+    const w = weaknessOf(exId);
+    if (!w) return;
+    const msg = '我记得你上次「' + w.msg + '」出现了 ' + w.n + ' 次';
+    setTimeout(() => { if (T.phase === 'live') feedback(msg, 'warn', 'coachmem', true, 9000); }, 1400);
+  }
+  /* 本次复盘：数据 → 个人最佳对比 → 失分归因 → 下一步建议 */
+  function buildReview(rec) {
+    const lines = [];
+    const isTime = rec.mode === 'time';
+    const unit = isTime ? rec.valid + ' 秒' : rec.valid + ' 次';
+    const best = isTime ? null : bestOf(rec.ex);
+    lines.push('本次' + (rec.name || '训练') + '：标准有效 ' + unit + '，用时 ' + rec.secs + ' 秒，动作评分 ' + rec.score + '。');
+    if (best != null && rec.valid > 0) {
+      if (rec.valid >= best) lines.push('🎉 这就是你的个人最佳（' + best + ' 次），下一次的目标是稳稳超过它。');
+      else lines.push('你的最好一次是 ' + best + ' 次，这次差 ' + (best - rec.valid) + ' 次——差距不大，保持节奏就能追上。');
+    }
+    const iss = Object.entries(rec.issues || {}).sort((a, b) => b[1] - a[1]);
+    const top = iss[0];
+    if (!top) lines.push('全程没有明显失分点，动作质量在线 👏');
+    else lines.push('失分主要集中在「' + ((X.ISSUES[top[0]] || {}).msg || top[0]) + '」×' + Math.round(top[1]) + ' 次。');
+    const adv = top ? ISSUE_ADVICE[top[0]] : null;
+    const target = isTime ? 0 : (rec.target || 0);
+    if (rec.score >= 85 && (isTime || !target || rec.valid >= target)) {
+      lines.push(top ? '质量已经够了，先把量控住，同时注意：' + adv + '。' : '可以直接加量：目标 +2 次或多加 1 组，或者换个组合练。');
+    } else if (rec.score >= 60) {
+      lines.push((adv || '按语音提示微调') + '。这个问题我会一直记着，下次开练前先提醒你。');
+    } else {
+      lines.push('这次量先放一边：建议目标减半，宁少不错，把「' + (top ? ((X.ISSUES[top[0]] || {}).msg || top[0]) : '动作幅度') + '」改到再上量。');
+    }
+    return { lines, text: lines.join(' ') };
+  }
+  function renderReview(rec) {
+    const box = $('#res-review'); if (!box) return;
+    const rv = buildReview(rec);
+    LAST_REVIEW = rv;
+    box.innerHTML = '<div class="rv-h">🧠 本次复盘 · 我记住了这些</div>' +
+      rv.lines.map(l => '<div class="rv-l">' + l + '</div>').join('');
+    box.hidden = false;
+    const vb = $('#btn-review'); if (vb) vb.hidden = false;
+  }
+  let LAST_REVIEW = null;
+  $('#btn-review').onclick = () => { if (LAST_REVIEW) speak(LAST_REVIEW.text, true); };
+  function coachNoteHTML() {
+    if (!DB.records.length) return '还没有你的训练数据。先随便练 3 分钟，我就开始记住你的动作习惯——下次不用你复述背景，我知道你哪里容易错。';
+    const w = aggWeak(14).filter(e => e[1] >= 2);
+    const head = '本周训练 ' + weekSessions() + ' 次 · 连续打卡 ' + streakDays() + ' 天';
+    if (!w.length) return head + '。近期没有明显失分点，动作质量在线；可以考虑把每日目标调高一点。';
+    const tot = w.reduce((a, e) => a + e[1], 0);
+    const pct = Math.round(w[0][1] / tot * 100);
+    return head + '。最常失分：「' + ((X.ISSUES[w[0][0]] || {}).msg || w[0][0]) + '」占问题次数 ' + pct + '%' +
+      (ISSUE_ADVICE[w[0][0]] ? '；' + ISSUE_ADVICE[w[0][0]] : '') + '。';
+  }
+
   /* ---------------- 循环训练（circuit） ---------------- */
   const CIR_DEFAULT = ['squat', 'jack', 'highknees', 'headshake'];
   $('#btn-circuit').onclick = () => { renderCircuitPicker(); $('#modal-circuit').hidden = false; };
-  function renderCircuitPicker() {
+  function renderCircuitPicker(preset) {
+    const sel = (preset && preset.length ? Array.from(new Set(preset)) : CIR_DEFAULT);
     const list = X.EXERCISES.filter(e => e.free || DB.pro);
     $('#cir-chips').innerHTML = list.map(e =>
-      '<label class="cir-chip' + (CIR_DEFAULT.includes(e.id) ? ' on' : '') + '">' +
-      '<input type="checkbox" value="' + e.id + '"' + (CIR_DEFAULT.includes(e.id) ? ' checked' : '') + '>' +
+      '<label class="cir-chip' + (sel.includes(e.id) ? ' on' : '') + '">' +
+      '<input type="checkbox" value="' + e.id + '"' + (sel.includes(e.id) ? ' checked' : '') + '>' +
       e.ico + ' ' + e.name + '</label>').join('');
-    $('#btn-cir-start').textContent = '开始循环（' + CIR_DEFAULT.length + ' 动作）';
+    $('#btn-cir-start').textContent = '开始循环（' + sel.length + ' 动作）';
   }
   $('#cir-chips').addEventListener('change', e => {
     const lab = e.target.closest('.cir-chip'); if (!lab) return;
@@ -642,7 +743,7 @@
     const first = seq[0];
     Object.assign(T, { ex: first, tracker: X.makeTracker(first.id), phase: 'setup', setIdx: 0, validSet: 0, validTot: 0,
       attempts: 0, issues: {}, timeSec: 0, badSec: 0, activeMs: 0, poseOkMs: 0, liveAt: {}, fbAt: {},
-      clip: [], clipNext: 0, clipSize: null, seq, seqIdx: 0, circuitStats: [] });
+      clip: [], clipNext: 0, clipSize: null, seq, seqIdx: 0, circuitStats: [], briefed: {} });
     $('#modal-circuit').hidden = true;
     go('train');
     state.lastHands = null;
@@ -696,7 +797,7 @@
     const score = Math.round(st.reduce((a, r) => a + r.score * Math.max(1, r.secs), 0) / Math.max(1, totSecs));
     const merged = {};
     st.forEach(r => Object.entries(r.issues || {}).forEach(([k, v]) => merged[k] = (merged[k] || 0) + v));
-    LAST_REC = { ts: Date.now(), ex: 'circuit', name: '循环训练', mode: 'reps',
+    LAST_REC = { ts: Date.now(), ex: 'circuit', name: '循环训练', mode: 'reps', target: 0,
       valid: totValid, attempts: totValid + totBad, secs: totSecs, cal: totCal, score, issues: merged };
     $('#res-emoji').textContent = '🔁';
     $('#res-title').textContent = '循环打完！' + st.length + ' 个动作全部完成' + (score >= 85 ? '，动作在线 💪' : '，质量为王 🔥');
@@ -709,11 +810,68 @@
     $('#res-issues').innerHTML = '<div class="ri"><span>' +
       st.map(r => r.name + ' ' + (r.mode === 'time' ? r.valid + 's' : r.valid + '次')).join(' · ') + '</span></div>' +
       (iss.length ? iss.map(([k, n]) => '<div class="ri"><span>' + (X.ISSUES[k] ? X.ISSUES[k].msg : k) + '</span><b>×' + n + '</b></div>').join('')
-                  : '<div class="ri"><span>本轮没有明显动作问题 👏</span>');
+                  : '<div class="ri"><span>本轮没有明显动作问题 👏</span></div>');
     $('#btn-replay').hidden = true;                // 循环回放暂不展示（clip 仅末段）
+    renderReview(LAST_REC);
     checkGoal();
     go('result'); sfx.finish();
   }
+
+  /* ---------------- AI 编排：一句话 → 循环节奏 ----------------
+   * 学的是“零门槛输入口”那一招：不让用户学怎么用，用户说人话就行。 */
+  const PLAN_PRESET = [
+    ['💺 办公室 5 分钟', '在办公室久坐，肩颈发酸，来 5 分钟'],
+    ['🔥 出汗燃脂 10 分钟', '想减脂出汗 10 分钟'],
+    ['🦵 下肢塑形 10 分钟', '练腿和臀 10 分钟'],
+    ['🧘 睡前放松', '睡前放松一下'],
+    ['💪 上肢核心', '练上肢和核心 8 分钟']
+  ];
+  let PLAN = null;
+  $('#btn-plan').onclick = () => {
+    $('#plan-presets').innerHTML = PLAN_PRESET.map(p => '<label class="cir-chip">' + p[0] + '</label>').join('');
+    PLAN = null; $('#plan-out').hidden = true; $('#btn-plan-start').hidden = true; $('#btn-plan-edit').hidden = true;
+    $('#plan-text').value = '';
+    $('#modal-plan').hidden = false;
+    setTimeout(() => { try { $('#plan-text').focus(); } catch (e) {} }, 60);
+  };
+  $('#plan-presets').onclick = e => {
+    const lab = e.target.closest('.cir-chip'); if (!lab) return;
+    const p = PLAN_PRESET.find(x => x[0] === lab.textContent); if (!p) return;
+    $$('#plan-presets .cir-chip').forEach(c => c.classList.toggle('on', c === lab));
+    $('#plan-text').value = p[1];
+    makePlan();
+  };
+  $('#plan-text').oninput = () => {
+    $$('#plan-presets .cir-chip').forEach(c => c.classList.remove('on'));
+    makePlan();
+  };
+  function makePlan() {
+    const txt = $('#plan-text').value.trim();
+    if (!txt) { $('#plan-out').hidden = true; $('#btn-plan-start').hidden = true; $('#btn-plan-edit').hidden = true; PLAN = null; return; }
+    PLAN = X.planFromText(txt, { pro: DB.pro });
+    $('#plan-names').innerHTML = PLAN.ids.map((id, i) => {
+      const e = X.EXERCISES.find(x => x.id === id);
+      return '<span class="pl-step">' + e.ico + ' ' + e.name + '</span>' + (i < PLAN.ids.length - 1 ? '<i>→</i>' : '');
+    }).join('');
+    $('#plan-meta').textContent = '约 ' + PLAN.estMin + ' 分钟 · ' + PLAN.ids.length + ' 段' +
+      (PLAN.seatedOnly ? ' · 全程坐着就能练' : '') +
+      (PLAN.rounds > 1 ? ' · 同一套重复 ' + PLAN.rounds + ' 遍填满时长' : '');
+    $('#plan-why').innerHTML = PLAN.why.map(w => '<div class="pw">· ' + w + '</div>').join('') +
+      (PLAN.locked.length ? '<div class="pw lock">🔒 你的目标里 ' + PLAN.locked.join(' / ') + ' 是 Pro 动作，升级后自动排进方案</div>' : '');
+    $('#plan-out').hidden = false;
+    $('#btn-plan-start').hidden = false;
+    $('#btn-plan-edit').hidden = false;
+  }
+  $('#btn-plan-start').onclick = () => {
+    if (!PLAN) return;
+    $('#modal-plan').hidden = true;
+    startCircuit(PLAN.ids);
+  };
+  $('#btn-plan-edit').onclick = () => {          // 方案不满意 → 带着推荐结果回 chips 自己改
+    $('#modal-plan').hidden = true;
+    renderCircuitPicker(PLAN ? PLAN.ids : null);
+    $('#modal-circuit').hidden = false;
+  };
 
   /* ---------------- 组回放（火柴人序列，非视频） ---------------- */
   const RP = { raf: null, i: 0, clock: 0, lastNow: 0, speed: 1, paused: false };
@@ -805,7 +963,10 @@
     });
     g.fillStyle = '#ffc94d'; g.font = '24px system-ui';
     g.fillText('🔥 连续打卡 ' + streakDays() + ' 天 · 本周训练 ' + weekSessions() + ' 次', 360, 1006);
-    g.fillStyle = '#e6f0ff'; g.font = '600 26px system-ui'; g.fillText('打开摄像头，马上就能练', 360, 1042);
+    /* 把复盘的最后一句（下一步建议）印上海报：分享的不只是数字，还有教练的判断 */
+    const tip = LAST_REVIEW && LAST_REVIEW.lines.length > 1 ? LAST_REVIEW.lines[LAST_REVIEW.lines.length - 1] : '打开摄像头，马上就能练';
+    const cut = tip.length > 26 ? tip.slice(0, 25) + '…' : tip;
+    g.fillStyle = '#e6f0ff'; g.font = '600 24px system-ui'; g.fillText(cut, 360, 1042);
     g.fillStyle = '#5c7aa6'; g.font = '19px system-ui';
     g.fillText('shixingya.github.io/dongjing · ' + fmtDate(rec.ts), 360, 1070);
   }
@@ -899,6 +1060,7 @@
     $('#hs-week').textContent = weekSessions();
     $('#hs-reps').textContent = weekValidReps();
     $('#hs-days').textContent = streakDays();
+    const cn = $('#coach-card'); if (cn) cn.innerHTML = '<b>🧠 教练笔记</b><span>' + coachNoteHTML() + '</span>';
     renderGoal();
     refreshChip();
   }

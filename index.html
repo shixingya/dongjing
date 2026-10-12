@@ -33,10 +33,11 @@
   <div class="hero">
     <div class="hero-txt">
       <h1>打开摄像头<br><span class="hl">AI 私教</span> 马上开工</h1>
-      <p>在家、在办公室，<b>只计标准有效次数</b>，动作错了当场喊你纠正。<br>全部 AI 在浏览器本地运算，<b>画面不上传云端</b>。</p>
+      <p>在家、在办公室，<b>只计标准有效次数</b>，动作错了当场喊你纠正。<br><b>10 个动作 · 33 关键点 · 19 条纠错规则</b>，全部 AI 在浏览器本地运算，<b>画面不上传云端</b>。</p>
       <div class="hero-btns">
         <button class="btn primary" data-ex="squat">▶ 开始今日训练</button>
         <button class="btn ghost" id="btn-circuit">🔁 循环训练</button>
+        <button class="btn ghost" id="btn-plan">✨ AI 编排</button>
         <button class="btn ghost" data-go="posture">🧍 体态评估</button>
       </div>
     </div>
@@ -53,6 +54,8 @@
       <div class="stat"><b id="hs-reps">0</b><span>本周有效次数</span></div>
     </div>
   </div>
+
+  <div class="coach-card card" id="coach-card"><b>🧠 教练笔记</b><span>还没有你的训练数据。</span></div>
 
   <h2 class="sec-title">动作库 <small>错误动作不计入次数</small></h2>
   <div class="ex-grid" id="ex-grid"><!-- JS 渲染动作卡片 --></div>
@@ -158,10 +161,12 @@
       <div><b id="res-cal">0</b><span>千卡(约)</span></div>
     </div>
     <div class="result-issues" id="res-issues"></div>
+    <div class="review" id="res-review" hidden></div>
     <div class="result-btns">
       <button class="btn primary" data-go="home">回首页</button>
       <button class="btn ghost" id="btn-again">再来一组</button>
       <button class="btn ghost" id="btn-replay" hidden>▶ 回放本组</button>
+      <button class="btn ghost" id="btn-review" hidden>🎙 复盘讲解</button>
       <button class="btn ghost" id="btn-share">🖼 分享成绩</button>
       <button class="btn ghost" data-go="report">查看报告</button>
     </div>
@@ -258,6 +263,26 @@
     <p class="muted">选 2–6 个动作，每个各做 1 组，动作间自动休息 10 秒，一口气跟练整轮。站姿坐姿可混选，切换时会引导重新摆姿势。</p>
     <div class="cir-chips" id="cir-chips"><!-- JS 渲染动作多选 chips --></div>
     <button class="btn primary" id="btn-cir-start">开始循环</button>
+  </div>
+</div>
+
+<!-- ====== AI 编排弹窗（一句话生成循环节奏） ====== -->
+<div class="modal" id="modal-plan" hidden>
+  <div class="modal-box card wide">
+    <button class="modal-x" data-close>✕</button>
+    <h3>✨ AI 编排 · 说一句就行</h3>
+    <p class="muted">不用选动作、不用凑时长：描述你的场地和目标，我直接排好顺序、算准时长，还能告诉你为什么这么排。</p>
+    <div class="cir-chips" id="plan-presets"><!-- JS 渲染快捷描述 --></div>
+    <textarea id="plan-text" rows="2" placeholder="例：在办公室久坐，肩颈发酸，只有 5 分钟；或想瘦腿出汗 10 分钟"></textarea>
+    <div class="plan-out" id="plan-out" hidden>
+      <div class="plan-steps" id="plan-names"></div>
+      <div class="plan-meta" id="plan-meta"></div>
+      <div class="plan-why" id="plan-why"></div>
+    </div>
+    <div class="replay-ctrls">
+      <button class="btn primary" id="btn-plan-start" hidden>▶ 就按这个开练</button>
+      <button class="btn ghost" id="btn-plan-edit" hidden>自己改</button>
+    </div>
   </div>
 </div>
 

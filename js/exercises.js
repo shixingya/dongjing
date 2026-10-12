@@ -526,9 +526,84 @@
     return { score, items, note: 'v1 为正面单视角近似评估，侧面位增强版（骨盆前倾/圆肩精确量化）在 P1 提供。' };
   }
 
+  /* ================= 一句话编排（AI 计划）=================
+   * 纯函数：自然语言 → 循环跟练动作序列。不依赖任何 DOM，便于 Node 单测。
+   * 思路：关键词命中场景/部位标签 → 标签对应动作候选池 → 按时长决定动作个数。 */
+  const PLAN_TAG = [
+    { re: /(办公室|久坐|久站|上班|工位|中午|午休|出差|酒店|空间小|没地方|椅子|坐着)/, pool: ['headshake', 'wave', 'shrug'], why: '场地有限：以坐姿上肢动作为主', seat: true },
+    { re: /(肩颈|脖子|颈椎|肩膀|酸痛|僵硬|放松|舒缓|拉伸)/, pool: ['shrug', 'headshake', 'wave'], why: '肩颈发紧：耸肩 + 摇头放松优先' },
+    { re: /(腿|臀|下肢|膝|深蹲|弓步|跑)/, pool: ['squat', 'lunge', 'highknees'], why: '下肢塑形：深蹲与弓步蹲' },
+    { re: /(减脂|燃脂|汗|心肺|体能|体力|烈|累|瘦)/, pool: ['jack', 'highknees', 'squat'], why: '拉心率燃脂：开合跳 + 高抬腿' },
+    { re: /(腹|核心|腰|平板|支撑|背)/, pool: ['plank', 'pushup', 'squat'], why: '核心稳定：平板支撑' },
+    { re: /(胸|臂|上肢|手|撑|俯卧撑)/, pool: ['pushup', 'wave', 'shrug'], why: '上肢力量：俯卧撑与挥臂' },
+    { re: /(睡前|晚上|晚间|睡不着|安神)/, pool: ['headshake', 'shrug', 'wave'], why: '睡前低强度：只做活动度不做冲击', easy: true }
+  ];
+  const PLAN_BALANCE = ['squat', 'jack', 'headshake', 'plank'];   // 没命中关键词时的均衡套餐
+  function planFromText(text, opts) {
+    const o = opts || {};
+    const s = String(text || '').toLowerCase();
+    const allowPro = !!o.pro;
+    const ok = id => {
+      const e = EXERCISES.find(x => x.id === id);
+      return !!e && (allowPro || e.free);
+    };
+    /* 时长：支持“5分钟 / 8 min / 半小”等，默认 8 分钟，限定 3–30 */
+    let min = o.minutes || 8;
+    const hm = s.match(/(\d+)\s*(分钟|分|min)/);
+    const hh = s.match(/(\d+)\s*(小时|h\b)/);
+    if (hh) min = (+hh[1]) * 60;
+    else if (hm) min = +hm[1];
+    else if (/半小/.test(s)) min = 30;
+    min = Math.min(30, Math.max(3, min));
+
+    const hits = PLAN_TAG.filter(t => t.re.test(s));
+    let why = hits.map(t => t.why);
+    if (!why.length) why = ['没识别到具体目标：给你一套均衡全身的标准套餐'];
+
+    /* 逐标签收集候选（先收集意向，再区分可用/被 Pro 拦住）；无命中用均衡套餐 */
+    const wanted = [];
+    let pool = [];
+    (hits.length ? hits : [{ pool: PLAN_BALANCE }]).forEach(t => t.pool.forEach(id => { if (!wanted.includes(id)) wanted.push(id); }));
+    wanted.forEach(id => { if (ok(id)) pool.push(id); });
+    const locked = wanted.filter(id => !ok(id)).map(id => EXERCISES.find(x => x.id === id).name);   // 命中但需 Pro
+    if (pool.length < 2) pool = PLAN_BALANCE.filter(ok);
+
+    /* 坐姿场景（命中 seat 标签且池内坐姿动作够 2 个）则全坐姿，不安排跳跃类动作 */
+    const seated = id => !!(EXERCISES.find(x => x.id === id) || {}).seated;
+    const seatOnly = hits.some(t => t.seat) && pool.filter(seated).length >= 2;
+    if (seatOnly) {
+      const keep = pool.filter(seated);
+      PLAN_TAG[0].pool.forEach(id => { if (ok(id) && !keep.includes(id)) keep.push(id); });
+      pool = keep;
+    }
+
+    /* 一轮里放几个动作：按时长算（每动作一轮 ≈ 40–100s），睡前低强度不拉长 */
+    const easy = hits.some(t => t.easy);
+    let n = Math.round(min / 1.5);
+    n = Math.min(6, Math.max(3, Math.min(n, pool.length)));
+    if (easy) n = Math.min(n, 4);
+    const base = pool.slice(0, n);
+    const legSec = id => {
+      const e = EXERCISES.find(x => x.id === id);
+      return e.mode === 'time' ? e.target + 5 : Math.min(120, Math.round(e.target * 2.4 + 8));
+    };
+    const roundSec = base.reduce((a, id) => a + legSec(id) + 10, 0);
+    /* 时长不够填满就整轮重复：按需求时长算轮数，最多 3 轮且总段数不超 8 */
+    let rounds = Math.floor(min * 60 / roundSec);
+    rounds = Math.max(1, Math.min(3, rounds));
+    rounds = Math.min(rounds, Math.max(1, Math.floor(8 / base.length)));
+    const ids = [];
+    for (let r = 0; r < rounds; r++) base.forEach(id => ids.push(id));
+    return {
+      ids, rounds, minutes: min, estMin: +(roundSec * rounds / 60).toFixed(1),
+      names: ids.map(id => EXERCISES.find(x => x.id === id).name),
+      seatedOnly: seatOnly, easy, why, locked
+    };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
-    ISSUES, EXERCISES, analyzePosture,
+    ISSUES, EXERCISES, analyzePosture, planFromText,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

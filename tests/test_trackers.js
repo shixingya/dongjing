@@ -140,6 +140,31 @@ function mkHand(tipDist) {
   if (reps !== 0 || !warned) process.exit(1);
 }
 
+/* --- 一句话编排 planFromText（纯函数）：场景识别 / 时长 / Pro 过滤 --- */
+{
+  const seatedSet = ['headshake', 'wave', 'shrug'];
+  const p1 = X.planFromText('我在办公室久坐，肩膀很酸，来个 5 分钟');
+  const allSeated = p1.ids.every(id => seatedSet.includes(id));
+  console.log('[编排-办公室] ids =', p1.ids.join(','), '全坐姿 =', allSeated, '时长 =', p1.minutes, '预计 =', p1.estMin);
+  if (!allSeated || !p1.seatedOnly || p1.minutes !== 5 || p1.ids.length < 3) process.exit(1);
+
+  const p2 = X.planFromText('想瘦腿出汗 10 分钟');
+  console.log('[编排-腿燃脂] ids =', p2.ids.join(','), '含深蹲 =', p2.ids.includes('squat'), '预计 =', p2.estMin);
+  if (!p2.ids.includes('squat') || !p2.ids.includes('jack') || p2.estMin > 13) process.exit(1);
+
+  const p3 = X.planFromText('练核心腹肌');
+  console.log('[编排-核心免费版] ids =', p3.ids.join(','), 'locked =', p3.locked.join('/'));
+  if (!p3.locked.includes('平板支撑') || p3.ids.includes('plank')) process.exit(1);
+
+  const p4 = X.planFromText('练核心腹肌 15 分钟', { pro: true });
+  console.log('[编排-核心Pro] ids =', p4.ids.join(','), '轮数 =', p4.rounds, 'locked =', p4.locked.length);
+  if (!p4.ids.includes('plank') || p4.locked.length !== 0 || p4.ids.length > 8) process.exit(1);
+
+  const p5 = X.planFromText('');
+  console.log('[编排-空输入] ids =', p5.ids.join(','), 'why =', p5.why[0]);
+  if (p5.ids.length < 3 || !/均衡/.test(p5.why[0])) process.exit(1);
+}
+
 /* --- 元数据完整性：10 动作、keys/start 均存在，坐姿系标记 --- */
 {
   const ids = X.EXERCISES.map(e => e.id);
