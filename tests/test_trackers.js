@@ -213,6 +213,73 @@ function mkHand(tipDist) {
   if (!X.GAME_KINDS || Object.keys(X.GAME_KINDS).length !== 3) process.exit(1);
 }
 
+/* --- 周课表：空历史 + 免费版（只能排免费动作，周日休息）--- */
+{
+  const MON = new Date(2026, 9, 12, 12, 0, 0).getTime();      // 2026-10-12 周一
+  const WED = new Date(2026, 9, 14, 8, 30, 0).getTime();       // 今天 = 周三 → todayI = 2
+  const rec = (off, id, mode, valid, score) => ({ ts: MON + off * 864e5 + 36e5, ex: id, name: id, mode,
+    target: 10, valid, attempts: valid + 1, secs: 60, cal: 5, score, issues: {} });
+  const freeIds = new Set(X.EXERCISES.filter(e => e.free).map(e => e.id));
+
+  const p = X.makeWeekPlan([], { today: WED });
+  console.log('[课表-空历史] days =', p.days.length, 'todayI =', p.todayI, '今日 =', p.days[2].theme, '/', p.days[2].names.join(','));
+  if (p.days.length !== 7 || p.todayI !== 2) process.exit(1);
+  if (p.days[6].kind !== 'rest' || p.days[6].targetPts !== 0) { console.log('周日应为休息日'); process.exit(1); }
+  if (p.days[2].ids.some(id => !freeIds.has(id))) { console.log('免费版排进了 Pro 动作'); process.exit(1); }
+  if (p.days[2].ids.length < 2 || p.next.type !== 'circuit') { console.log('今日应有可开练的循环'); process.exit(1); }
+  /* 时长估算必须带出（曾有 day 对象漏返 estMin 导致界面显示“约 undefined 分钟”）*/
+  if (!(p.days[2].estMin > 0) || !/约 [\d.]+ 分钟/.test(p.tip) || /undefined|NaN/.test(p.tip)) {
+    console.log('estMin/tip 异常', p.days[2].estMin, p.tip); process.exit(1); }
+  if (p.days[5].estMin !== 1 || p.days[6].estMin !== 0) { console.log('关卡日应 1 分钟、休息日 0', p.days[5].estMin, p.days[6].estMin); process.exit(1); }
+  if (p.days[0].status !== 'missed' || p.days[3].status !== 'upcoming') { console.log('状态机错', p.days[0].status, p.days[3].status); process.exit(1); }
+  if (p.missed !== 2) { console.log('周一周二应算漏练', p.missed); process.exit(1); }
+
+  /* Pro 专属动作：核心日（周四）在 Pro 下才能排进 plank/pushup */
+  const pro = X.makeWeekPlan([], { today: WED, pro: true });
+  const corePro = pro.days[3].ids.filter(id => id === 'plank' || id === 'pushup');
+  const coreFree = p.days[3].ids.filter(id => id === 'plank' || id === 'pushup');
+  console.log('[课表-Pro] 核心日 Pro =', pro.days[3].names.join(','), '/ 免费 =', p.days[3].names.join(','));
+  if (!corePro.length || coreFree.length) process.exit(1);
+
+  /* 弱项优先：深蹲均分 50、其他动作均分 90+ → 心肺日（周三）应把深蹲排在最前 */
+  const weak = X.makeWeekPlan([
+    rec(0, 'squat', 'reps', 12, 48), rec(1, 'squat', 'reps', 10, 52),
+    rec(0, 'jack', 'reps', 20, 92), rec(1, 'jack', 'reps', 22, 88),
+    rec(0, 'highknees', 'reps', 20, 96), rec(1, 'highknees', 'reps', 22, 94),
+    rec(0, 'wave', 'reps', 20, 99), rec(1, 'wave', 'reps', 22, 97)
+  ], { today: WED, pro: true });
+  const ci = weak.days[2].ids;
+  console.log('[课表-弱项] 心肺日顺序 =', ci.join(','), '弱项 =', weak.weak.join(' / '));
+  if (ci.indexOf('squat') < 0 || ci.indexOf('squat') > ci.indexOf('jack')) { console.log('弱项应优先'); process.exit(1); }
+  if (!weak.weak.length || !/深蹲/.test(weak.weak[0])) { console.log('weak 应报深蹲', weak.weak); process.exit(1); }
+
+  /* 额度排完自动降级为关卡日（关卡不扣额度） */
+  const q = X.makeWeekPlan([], { today: WED, quotaLeft: 2 });
+  const down = q.days.filter(d => d.note);
+  console.log('[课表-额度] planned =', q.plannedSessions, '降级日 =', down.map(d => d.theme + ':' + d.game).join(','));
+  if (q.plannedSessions !== 2 || down.length < 2 || down.some(d => d.kind !== 'game' || d.ids.length)) process.exit(1);
+
+  /* 今日完成口径：计时/关卡折点 + tip 文案 */
+  const d1 = X.makeWeekPlan([rec(2, 'squat', 'reps', 40, 88)], { today: WED, dailyGoal: 30 });
+  const d2 = X.makeWeekPlan([rec(2, 'squat', 'reps', 10, 88)], { today: WED, dailyGoal: 30 });
+  const d3 = X.makeWeekPlan([rec(2, 'plank', 'time', 45, 90), rec(2, 'collect', 'game', 21, 70)], { today: WED, dailyGoal: 30, pro: true });
+  console.log('[课表-完成] 达标 =', d1.tip, '\n         未达 =', d2.tip, '\n         折点 =', d3.days[2].donePts, d3.tip);
+  if (!d1.days[2].met || !/已完成/.test(d1.tip)) process.exit(1);
+  if (d2.days[2].met !== false || !/还差 20 点/.test(d2.tip)) process.exit(1);
+  if (d3.days[2].donePts !== 12) { console.log('折点应为 45/10 + 21/3 = 12', d3.days[2].donePts); process.exit(1); }
+
+  /* 周日：无推荐开练动作，tip 指向明天 */
+  const SUN = new Date(2026, 9, 18, 9, 0, 0).getTime();
+  const r = X.makeWeekPlan([], { today: SUN });
+  console.log('[课表-周日] todayI =', r.todayI, 'next =', r.next, 'tip =', r.tip);
+  if (r.todayI !== 6 || r.next !== null || !/休息日/.test(r.tip)) process.exit(1);
+
+  /* 关卡日（周六）next 直接指向一局游戏 */
+  const g = X.makeWeekPlan([], { today: new Date(2026, 9, 17, 10, 0, 0).getTime() });
+  console.log('[课表-关卡日] kind =', g.days[5].kind, 'next =', JSON.stringify(g.next));
+  if (g.days[5].kind !== 'game' || g.next.type !== 'game' || !X.GAME_KINDS[g.next.kind]) process.exit(1);
+}
+
 /* --- 元数据完整性：10 动作、keys/start 均存在，坐姿系标记 --- */
 {
   const ids = X.EXERCISES.map(e => e.id);

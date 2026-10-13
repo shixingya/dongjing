@@ -35,7 +35,7 @@
   <div class="hero">
     <div class="hero-txt">
       <h1>打开摄像头<br><span class="hl">AI 私教</span> 马上开工</h1>
-      <p>在家、在办公室，<b>只计标准有效次数</b>，动作错了当场喊你纠正。<br><b>10 个动作 · 33 关键点 · 19 条纠错规则 · 3 个体感关卡</b>，全部 AI 在浏览器本地运算，<b>画面不上传云端</b>。</p>
+      <p>在家、在办公室，<b>只计标准有效次数</b>，动作错了当场喊你纠正。<br><b>10 个动作 · 33 关键点 · 19 条纠错规则 · 3 个体感关卡 · 7 天自动课表</b>，全部 AI 在浏览器本地运算，<b>画面不上传云端</b>。</p>
       <div class="hero-btns">
         <button class="btn primary" data-ex="squat">▶ 开始今日训练</button>
         <button class="btn ghost" id="btn-circuit">🔁 循环训练</button>
@@ -59,6 +59,14 @@
   </div>
 
   <div class="coach-card card" id="coach-card"><b>🧠 教练笔记</b><span>还没有你的训练数据。</span></div>
+
+  <!-- 本周课表：内容全部由 JS 按本机记录重算 -->
+  <div class="card plan-card" id="plan-card">
+    <div class="plan-head"><b>📅 本周课表</b><span class="tiny muted" id="plan-sum"></span></div>
+    <div class="wk-row" id="plan-days"></div>
+    <div class="plan-detail" id="plan-detail"></div>
+    <div class="plan-act"><button class="btn primary" id="btn-plan-go">照课表开练</button></div>
+  </div>
 
   <h2 class="sec-title">动作库 <small>错误动作不计入次数</small></h2>
   <div class="ex-grid" id="ex-grid"><!-- JS 渲染动作卡片 --></div>

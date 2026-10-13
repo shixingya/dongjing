@@ -1307,6 +1307,57 @@
   $('#btn-pst-again').onclick = () => { $('#pst-result').hidden = true; $('#pst-intro').hidden = false; go('posture'); };
   function endPosture() { P.on = false; P.samples = []; P.tick = 0; }
 
+  /* ---------------- 本周课表（v1.6）----------------
+   * 课表不是另一个“计划工具”：它直接读本机历史记录重算，点一下就能开练。
+   * 逻辑全在 DJX.makeWeekPlan（纯函数），这里只管渲染与路由到循环/关卡。 */
+  let PLAN_SEL = null, PLAN_TODAY_I = null;
+  function weekPlan() {
+    return X.makeWeekPlan(DB.records, {
+      pro: DB.pro, dailyGoal: DB.set.dailyGoal,
+      quotaLeft: DB.pro ? undefined : Math.max(0, FREE_QUOTA - quotaUsed())   // 免费版才需要按额度排课
+    });
+  }
+  function planSelDay(p) {
+    const i = PLAN_SEL == null ? p.todayI : PLAN_SEL;
+    return p.days[Math.max(0, Math.min(6, i))];
+  }
+  function renderPlan() {
+    const box = $('#plan-card'); if (!box) return;
+    const p = weekPlan();
+    if (PLAN_TODAY_I !== p.todayI) { PLAN_SEL = null; PLAN_TODAY_I = p.todayI; }   // 隔了一天就回到“今天”
+    const sel = planSelDay(p);
+    $('#plan-sum').textContent = '自动按你的记录重算 · 本周 ' + p.weekPts + '/' + p.weekTarget + ' 点'
+      + (p.missed ? ' · 已漏 ' + p.missed + ' 天' : '') + (p.plannedSessions ? ' · 待练 ' + p.plannedSessions + ' 次' : '');
+    $('#plan-days').innerHTML = p.days.map(d =>
+      '<button class="wk-day ' + d.status + ' k-' + d.kind + (d.i === sel.i ? ' on' : '') + '" data-wk="' + d.i + '">' +
+      '<span class="wd">周' + d.wd + '</span><span class="wt">' + d.theme + '</span>' +
+      '<span class="wp">' + (d.kind === 'rest' ? '😴' : d.done ? d.donePts + '点' + (d.met ? ' ✓' : '') : d.kind === 'game' ? '🎮' : d.targetPts + '点') + '</span></button>').join('');
+    const body = sel.kind === 'train'
+      ? '<p>' + sel.names.map(n => '<b>' + n + '</b>').join(' / ') + ' · 约 ' + sel.estMin + ' 分钟 · ' + sel.targetPts + ' 点</p>'
+      : sel.kind === 'game'
+        ? '<p>' + X.GAME_KINDS[sel.game].name + ' · 60 秒一局 · 不扣训练额度</p>'
+        : '<p>今天不排课，让肌肉长回来</p>';
+    $('#plan-detail').innerHTML = '<b>' + sel.theme + ' · 周' + sel.wd + ' ' + sel.date + '</b>' + body +
+      '<p class="tiny muted">' + sel.why + (sel.note ? '（' + sel.note + '）' : '') + '</p>' +
+      (sel.i === p.todayI ? '<p class="wk-tip">' + p.tip + '</p>'
+        : sel.done ? '<p class="wk-tip">这天已完成 ' + sel.donePts + '/' + sel.targetPts + ' 点</p>' : '');
+    const btn = $('#btn-plan-go');
+    if (sel.kind === 'rest') { btn.textContent = '今天休息 😴'; btn.dataset.act = 'rest'; }
+    else if (sel.kind === 'game') { btn.textContent = '玩这一局 🎮'; btn.dataset.act = 'game'; }
+    else { btn.textContent = (sel.i === p.todayI ? '照课表开练' : '练这天') + ' ▶'; btn.dataset.act = 'train'; }
+  }
+  $('#plan-days').onclick = e => {
+    const b = e.target.closest('[data-wk]'); if (!b) return;
+    PLAN_SEL = +b.dataset.wk; renderPlan();
+  };
+  $('#btn-plan-go').onclick = () => {
+    const d = planSelDay(weekPlan());
+    if (d.kind === 'game') { openGame(d.game); return; }
+    if (d.kind !== 'train' || !d.ids.length) { toast('休息日不用练，明天再说 💪'); speak('今天是休息日', true); return; }
+    if (d.ids.length < 2) { openTrain(d.ids[0]); return; }   // 极端情况（动作库被收缩）退化为单动作
+    startCircuit(d.ids);
+  };
+
   /* ---------------- 首页 ---------------- */
   function bestOf(exId) {
     const rs = DB.records.filter(r => r.ex === exId && r.mode === 'reps');
@@ -1329,6 +1380,7 @@
     $('#hs-reps').textContent = weekValidReps();
     $('#hs-days').textContent = streakDays();
     const cn = $('#coach-card'); if (cn) cn.innerHTML = '<b>🧠 教练笔记</b><span>' + coachNoteHTML() + '</span>';
+    renderPlan();
     renderGoal();
     refreshChip();
   }
@@ -1472,9 +1524,10 @@
 
   /* ---------------- 启动 ---------------- */
   renderHome(); renderMe(); refreshChip(); envCheck();
-  window.__dongjing = {          // 调试句柄：控制台可读 lastLm/训练/关卡/环境状态做远程诊断
+  window.__dongjing = {          // 调试句柄：控制台可读 lastLm/训练/关卡/课表/环境状态做远程诊断
     state, DB, T, get G() { return G; }, get raf() { return rafId; },
-    openGame, envCheck,
+    openGame, openTrain, startCircuit, envCheck,
+    weekPlan, renderPlan, selectPlan(i) { PLAN_SEL = i; renderPlan(); },
     env: { IS_IOS, IS_ANDROID, IS_MOBILE, IN_WX, DETECT_GAP, get speechUnlocked() { return speechUnlocked; } }
   };
   document.addEventListener('keydown', e => {

@@ -583,10 +583,7 @@
     n = Math.min(6, Math.max(3, Math.min(n, pool.length)));
     if (easy) n = Math.min(n, 4);
     const base = pool.slice(0, n);
-    const legSec = id => {
-      const e = EXERCISES.find(x => x.id === id);
-      return e.mode === 'time' ? e.target + 5 : Math.min(120, Math.round(e.target * 2.4 + 8));
-    };
+    const legSec = id => exRoundSec(EXERCISES.find(x => x.id === id));
     const roundSec = base.reduce((a, id) => a + legSec(id) + 10, 0);
     /* 时长不够填满就整轮重复：按需求时长算轮数，最多 3 轮且总段数不超 8 */
     let rounds = Math.floor(min * 60 / roundSec);
@@ -598,6 +595,114 @@
       ids, rounds, minutes: min, estMin: +(roundSec * rounds / 60).toFixed(1),
       names: ids.map(id => EXERCISES.find(x => x.id === id).name),
       seatedOnly: seatOnly, easy, why, locked
+    };
+  }
+
+  /* ================= 周课表（7 天计划）=================
+   * 纯函数：把“这周该练什么”排成 7 天课表，并根据本机历史记录自动重算。
+   * 约束全部来自真实产品逻辑：Pro 动作只有订阅者能排、免费额度排完就自动改成
+   * 不扣额度的体感关卡、周日固定休息。不用随机数，所以可测、可复现。 */
+  const WEEK_PLAN = [
+    { name: '下肢力量', pool: ['squat', 'lunge', 'highknees', 'jack'], game: 'guard', why: '大肌群先练，代谢收益最高' },
+    { name: '肩颈放松', pool: ['shrug', 'headshake', 'wave'], game: null, why: '久坐一天的头肩颈，只要活动度不要力竭' },
+    { name: '心肺燃脂', pool: ['jack', 'highknees', 'squat', 'wave'], game: 'dodge', why: '拉心率的一天，动作节奏要快' },
+    { name: '核心稳定', pool: ['plank', 'pushup', 'squat', 'shrug'], game: null, why: '躯干稳了体态评分才会涨' },
+    { name: '久坐激活', pool: ['headshake', 'wave', 'shrug', 'grasp'], game: null, why: '办公室随时能做，不需要场地' },
+    { name: '体感关卡', pool: [], game: 'collect', why: '玩着把幅度拉开，而且不占训练额度' },
+    { name: '休息日', pool: [], game: null, why: '肌肉在休息时才长，别硬撑' }
+  ];
+  const WEEK_FILL = ['squat', 'jack', 'headshake', 'wave', 'shrug', 'highknees'];   // 权限/额度受限时的补位（全部免费）
+
+  /* 一个动作做一组的估算秒数（含准备），编排与课表共用同一口径 */
+  function exRoundSec(e) {
+    if (!e) return 60;
+    return e.mode === 'time' ? e.target + 5 : Math.min(120, Math.round(e.target * 2.4 + 8));
+  }
+
+  function makeWeekPlan(records, opts) {
+    const o = opts || {};
+    const rs = Array.isArray(records) ? records : [];
+    const allowPro = !!o.pro;
+    const goal = (o.dailyGoal | 0) > 0 ? (o.dailyGoal | 0) : 30;      // 没设每日目标时课表按 30 点排
+    const hasQuota = typeof o.quotaLeft === 'number';
+    const quotaLeft = hasQuota ? Math.max(0, o.quotaLeft | 0) : Infinity;
+    const exOf = id => EXERCISES.find(x => x.id === id);
+    const nmOf = id => (exOf(id) || { name: id }).name;
+
+    /* 一周从周一开始 */
+    const t0 = new Date(o.today || Date.now()); t0.setHours(0, 0, 0, 0);
+    const monday = t0.getTime() - ((t0.getDay() + 6) % 7) * 864e5;
+    const startOf = ts => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
+    const todayI = Math.round((startOf(o.today || Date.now()) - monday) / 864e5);
+    /* 训练点口径与 app.js 今日目标一致：计次动作 1 次=1 点，计时每 10s=1 点，关卡得分÷3 */
+    const ptsOf = r => r.mode === 'game' ? Math.round(r.valid / 3) : r.mode === 'time' ? Math.round(r.valid / 10) : r.valid;
+
+    const bucket = [[], [], [], [], [], [], []];
+    rs.forEach(r => { const i = Math.round((startOf(r.ts) - monday) / 864e5); if (i >= 0 && i <= 6) bucket[i].push(r); });
+
+    /* 近 14 天各动作平均分：分低的先排进课表（弱项优先），没练过的给中性 75 分 */
+    const since = monday - 7 * 864e5;
+    const agg = {};
+    rs.forEach(r => {
+      if (r.ts >= since && r.mode !== 'game') { const a = agg[r.ex] || (agg[r.ex] = { n: 0, s: 0 }); a.n++; a.s += (r.score || 0); }
+    });
+    const scoreOf = id => { const a = agg[id]; return a ? Math.round(a.s / a.n) : 75; };
+    const avail = id => { const e = exOf(id); return !!e && (allowPro || e.free); };
+
+    let quotaSpent = 0;
+    const days = WEEK_PLAN.map((th, i) => {
+      const d0 = monday + i * 864e5, dd = new Date(d0);
+      let kind = th.pool.length ? 'train' : (th.game ? 'game' : 'rest');
+      const recs = bucket[i];
+      const donePts = recs.reduce((a, r) => a + ptsOf(r), 0);
+      let note = '';
+      /* 动作选择：可用的 + 弱项优先，最多 3 个；不够 2 个就从免费补位池凑 */
+      let ids = [];
+      if (kind === 'train') {
+        ids = th.pool.filter(avail).sort((a, b) => scoreOf(a) - scoreOf(b)).slice(0, 3);
+        if (ids.length < 2) WEEK_FILL.forEach(id => { if (ids.length < 3 && avail(id) && !ids.includes(id)) ids.push(id); });
+      }
+      /* 一个训练日 = 1 次循环跟练 = 1 次额度；免费额度排完自动降级成关卡日 */
+      if (kind === 'train') {
+        if (hasQuota && quotaSpent >= quotaLeft) {
+          kind = 'game'; ids = []; note = '本月训练额度已排满：改为不扣额度的体感关卡';
+        } else quotaSpent++;
+      }
+      const gk = kind === 'game' ? (th.game || 'collect') : null;
+      const estMin = kind === 'train'
+        ? +(ids.reduce((a, id) => a + exRoundSec(exOf(id)) + 10, 0) / 60).toFixed(1)
+        : kind === 'game' ? 1 : 0;
+      const done = recs.length > 0;
+      return {
+        i, date: (dd.getMonth() + 1) + '/' + dd.getDate(), wd: ['日', '一', '二', '三', '四', '五', '六'][dd.getDay()],
+        theme: th.name, why: th.why, kind, ids, names: ids.map(nmOf), game: gk, estMin,
+        targetPts: kind === 'rest' ? 0 : goal, donePts, done, met: done && donePts >= goal,
+        status: i === todayI ? 'today' : i < todayI ? (done ? 'done' : 'missed') : 'upcoming',
+        sessions: recs.length, note
+      };
+    });
+
+    const td = days[Math.max(0, Math.min(6, todayI))];
+    const tmr = days[(td.i + 1) % 7];
+    const exNames = td.names.length ? td.names.join(' / ') : (td.game ? GAME_KINDS[td.game].name : '');
+    let tip;
+    if (td.kind === 'rest') tip = '今天是休息日 😴 明天排的是「' + tmr.theme + '」；实在想动就做一局体感关卡，不扣额度';
+    else if (td.kind === 'game') tip = '今天是关卡日：' + GAME_KINDS[td.game].name + '，60 秒一局不扣额度';
+    else if (td.met) tip = '今日「' + td.theme + '」已完成 ✓ ' + td.donePts + '/' + td.targetPts + ' 点，明天是「' + tmr.theme + '」';
+    else if (td.done) tip = '今日「' + td.theme + '」已拿 ' + td.donePts + ' 点，还差 ' + Math.max(0, td.targetPts - td.donePts) + ' 点：补做 ' + exNames;
+    else tip = '今日该练「' + td.theme + '」：' + exNames + '，约 ' + td.estMin + ' 分钟' + (td.note ? '（' + td.note + '）' : '');
+    const missed = days.filter(d => d.status === 'missed').length;
+
+    return {
+      days, todayI: td.i, tip,
+      tipMore: td.kind === 'rest' ? '' : td.done ? '' : ' · ' + td.why,
+      weekPts: days.reduce((a, d) => a + d.donePts, 0),
+      weekTarget: days.filter(d => d.kind !== 'rest').reduce((a, d) => a + d.targetPts, 0),
+      missed, plannedSessions: quotaSpent, goal,
+      weak: Object.entries(agg).filter(([, a]) => a.n >= 2).sort((x, y) => x[1].s / x[1].n - y[1].s / y[1].n)
+        .slice(0, 2).map(([id, a]) => nmOf(id) + '（均分 ' + Math.round(a.s / a.n) + '）'),
+      next: td.kind === 'game' ? { type: 'game', kind: td.game }
+        : td.kind === 'train' && td.ids.length ? { type: 'circuit', ids: td.ids } : null
     };
   }
 
@@ -691,6 +796,7 @@
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, planFromText, GAME_KINDS, makeGame,
+    makeWeekPlan, WEEK_PLAN, exRoundSec,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,
