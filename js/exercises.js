@@ -1352,12 +1352,52 @@
     };
   }
 
+  /* ================= 部位覆盖度（v2.7）=================
+   * 把 13 个动作按主要锻炼部位归入五大块（下肢/核心/上肢/颈肩/侧链），
+   * 统计每块练过的节数/训练点/命中动作数，看哪几块长期空白。口径仍复用 recPoints，
+   * 关卡（game-）/循环（circuit）等非真动作 id 不计。 */
+  const BODY_REGIONS = [
+    { key: 'lower',   name: '下肢', ico: '\ud83e\uddb5', ids: ['squat', 'lunge', 'wallsit', 'highknees', 'jack'] },
+    { key: 'core',    name: '核心', ico: '\ud83c\udfaf', ids: ['plank'] },
+    { key: 'upper',   name: '上肢', ico: '\ud83d\udcaa', ids: ['pushup', 'sidraise', 'grasp'] },
+    { key: 'neck',    name: '颈肩', ico: '\ud83e\uddd8', ids: ['headshake', 'wave', 'shrug'] },
+    { key: 'lateral', name: '侧链', ico: '\ud83c\udf17', ids: ['sidestretch'] }
+  ];
+  function bodyCoverage(records) {
+    const rs = Array.isArray(records) ? records : [];
+    const R2 = {};
+    BODY_REGIONS.forEach(r => r.ids.forEach(id => { R2[id] = r.key; }));
+    const acc = {};
+    BODY_REGIONS.forEach(r => { acc[r.key] = { sessions: 0, points: 0, ex: new Set() }; });
+    rs.forEach(rec => {
+      if (!rec || !rec.ex || !R2[rec.ex]) return;
+      const a = acc[R2[rec.ex]];
+      a.sessions++; a.points += recPoints(rec); a.ex.add(rec.ex);
+    });
+    const regions = BODY_REGIONS.map(r => ({
+      key: r.key, name: r.name, ico: r.ico, poolSize: r.ids.length,
+      sessions: acc[r.key].sessions, points: acc[r.key].points,
+      exCovered: acc[r.key].ex.size, covered: acc[r.key].sessions > 0
+    }));
+    const regionCount = regions.length;
+    const coveredCount = regions.filter(r => r.covered).length;
+    const totalSessions = regions.reduce((s, r) => s + r.sessions, 0);
+    const gaps = regions.filter(r => !r.covered).map(r => r.name);
+    let weakest = null;
+    regions.filter(r => r.covered).forEach(r => { if (!weakest || r.sessions < weakest.sessions) weakest = r; });
+    return {
+      regions, regionCount, coveredCount, totalSessions,
+      coveragePct: Math.round(coveredCount / regionCount * 100),
+      gaps, weakestName: weakest ? weakest.name : ''
+    };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

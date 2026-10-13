@@ -121,6 +121,8 @@
 
 - ✅ **v2.6 已交付（星期训练节奏：发现“你一周里星期几最勤快”）**：① `weekdayRhythm(records)` 纯函数—把记录按星期分桶（周一为一周起点，`weekdayIndex = (getDay()+6)%7` 把 JS 周日=0 转过来），逐日统计 sessions / points（复用 `recPoints`）/ avgScore，返回 `{days(7),total,busiestIdx,busiestName,busiestSessions,weekdaySessions,weekendSessions,weekendPct}`；② **与 v2.4 时段分布互补**（一个看日内“什么时候练”、一个看周内“星期几练”），同样按节数优先、平手按点数决胜；空数据/非法记录（null / NaN ts）丢弃不崩；③ **额外拆工作日 vs 周末**：周六/周日归周末，weekendPct 让“只周末突击型” vs “工作日打卡型”一眼可辨；④ 渲染只画七行横向迷你条（宽=sessions/max）、最勤一行加 best 高亮，副标题“你最勤的是 X（N 节）· 周末占 X%”；⑤ 单测覆盖空数据、七天分桶与均分/points、工作日3/周末2 拆分与 weekendPct、平手按点数决胜、非法记录丢弃；浏览器冒烟注入“周一 3 节 + 周三 1 + 周六 2”跨星期记录，DOM 7 行与 `DJX.weekdayRhythm` 逐行一致、best 行=周一、total 6、周末占 33%、0 console error。
 
+- ✅ **v2.7 已交付（部位覆盖度：发现“你总是忽略哪块部位”）**：① `bodyCoverage(records)` 纯函数—把 13 个动作按主要锻炼部位归入 `BODY_REGIONS` 五大块（下肢 squat/lunge/wallsit/highknees/jack、核心 plank、上肢 pushup/sidraise/grasp、颈肩 headshake/wave/shrug、侧链 sidestretch，恰好不重不漏盖满 13 个），逐块统计 sessions / points（复用 `recPoints`）/ exCovered（命中的不同动作数），返回 `{regions(5),regionCount,coveredCount,coveragePct,totalSessions,gaps,weakestName}`；② **只认真实动作库 id**：关卡 game- / 循环 circuit / null 不计；③ **gaps 一目了然**：sessions=0 的部位进 gaps，weakestName 取已覆盖里节数最少的一块；④ 渲染五行列表（图标+部位+节数/点数/动作命中数），已覆盖行高亮✓、空白行 `.gap` 弱化打灰标“缺”，副标题“已练到 N/5 个部位 · 还缺 X”；⑤ 单测覆盖 BODY_REGIONS 恰好 5 块/13 ids 不重不漏、空数据 pct0/gaps5、混合数据 covered3/pct60/total4（game+circuit+null 均排除）/gaps=[上肢,侧链]/weakest=核心、time 换算 points；浏览器冒烟注入“下肢×2 + 核心×1 + 颈肩×1 + game”，DOM 5 行与 `DJX.bodyCoverage` 逐行 name/gap/tag 零 mismatch、上肢与侧链两行为 gap、副标题“已练到 3/5 个部位 · 还缺 上肢、侧链”正确、0 console error。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；

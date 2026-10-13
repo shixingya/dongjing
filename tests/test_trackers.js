@@ -934,4 +934,44 @@ function mkHand(tipDist) {
   console.log('[wd] 全部断言通过');
 }
 
+/* ================= v2.7 部位覆盖度 bodyCoverage ================= */
+{
+  const fail = m => { console.log('[bc] FAIL:', m); process.exit(1); };
+  if (X.BODY_REGIONS.length !== 5) fail('部位应为 5 块');
+  /* 13 个真动作恰好各归一块、不重不漏 */
+  const mapped = X.BODY_REGIONS.flatMap(r => r.ids);
+  const exIds = X.EXERCISES.map(e => e.id);
+  if (mapped.length !== 13) fail('五块总 ids 应 13, 实际 ' + mapped.length);
+  if (new Set(mapped).size !== 13) fail('不应有重复归类');
+  if (!exIds.every(i => mapped.includes(i))) fail('应覆盖全部动作库 id');
+
+  /* 空数据 */
+  const e = X.bodyCoverage([]);
+  if (e.coveragePct !== 0 || e.coveredCount !== 0 || e.gaps.length !== 5 || e.totalSessions !== 0) fail('空数据 pct0/covered0/gaps5/tot0');
+
+  /* 混合：下肢 2 节 + 核心 1(time) + 颈肩 1 + game 忽略 */
+  const recs = [
+    { ex: 'squat', mode: 'reps', valid: 10 },
+    { ex: 'squat', mode: 'reps', valid: 5 },
+    { ex: 'plank', mode: 'time', valid: 60 },
+    { ex: 'headshake', mode: 'reps', valid: 8 },
+    { ex: 'game-collect', mode: 'game', valid: 30 },
+    { ex: 'circuit', mode: 'reps', valid: 12 },
+    null
+  ];
+  const r = X.bodyCoverage(recs);
+  if (r.totalSessions !== 4) fail('total 应 4（game/circuit/null 不计）实际 ' + r.totalSessions);
+  if (r.coveredCount !== 3 || r.coveragePct !== 60) fail('应覆盖 3/5 块 pct60, 实际 ' + r.coveredCount + '/' + r.coveragePct);
+  if (r.gaps.join(',') !== '上肢,侧链') fail('空白应上肢,侧链 实际 ' + r.gaps.join(','));
+  const byKey = {}; r.regions.forEach(x => byKey[x.key] = x);
+  if (byKey.lower.sessions !== 2 || byKey.lower.points !== 15) fail('下肢 2 节/15 点 实际 ' + byKey.lower.sessions + '/' + byKey.lower.points);
+  if (byKey.lower.exCovered !== 1) fail('下肢命中 1 个动作');
+  if (byKey.core.sessions !== 1 || byKey.core.points !== 6) fail('核心 time60 → 1 节/6 点 实际 ' + byKey.core.points);
+  if (byKey.neck.sessions !== 1) fail('颈肩 1 节');
+  if (byKey.upper.covered || byKey.lateral.covered) fail('上肢/侧链应未覆盖');
+  if (r.weakestName !== '核心') fail('最薄弱（已覆盖里节数最少）应核心 实际 ' + r.weakestName);
+
+  console.log('[bc] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

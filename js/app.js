@@ -1564,6 +1564,7 @@
     renderDaypart();
     renderBests();
     renderRhythm();
+    renderCoverage();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1689,6 +1690,21 @@
     }).join('');
     const sum = $('#wd-sum');
     if (sum) sum.textContent = '你最勤的是 ' + wd.busiestName + '（' + wd.busiestSessions + ' 节）· 周末占 ' + wd.weekendPct + '%';
+  }
+
+  /* 部位覆盖度：bodyCoverage 纯逻辑按五大块聚合节数/点数/命中动作，这里只列五行与空白提示 */
+  function renderCoverage() {
+    const box = $('#bc-rows'); if (!box) return;
+    const bc = X.bodyCoverage(DB.records);
+    if (!bc.totalSessions) { box.innerHTML = '<div class="empty-tip">还没有训练记录，练几次这里会显示你覆盖了哪些部位</div>'; const s0 = $('#bc-sum'); if (s0) s0.textContent = ''; return; }
+    box.innerHTML = bc.regions.map(r =>
+      '<div class="bc-row' + (r.covered ? '' : ' gap') + '" title="' + r.name + ' · ' + (r.covered ? ('练过 ' + r.sessions + ' 节 · ' + r.points + ' 点 · 命中 ' + r.exCovered + '/' + r.poolSize + ' 个动作') : '还没练过这个部位') + '">' +
+      '<span class="bc-ico">' + r.ico + '</span>' +
+      '<div class="bc-main"><b>' + r.name + '</b><span class="bc-sub">' + (r.covered ? (r.sessions + ' 节 · ' + r.points + ' 点 · 动作 ' + r.exCovered + '/' + r.poolSize) : '未覆盖') + '</span></div>' +
+      '<span class="bc-tag">' + (r.covered ? '✓' : '缺') + '</span></div>').join('');
+    const sum = $('#bc-sum');
+    const tail = bc.coveragePct === 100 ? '· 全身部位都练到啦 ✦' : ('· 还缺 ' + bc.gaps.join('、'));
+    if (sum) sum.textContent = '已练到 ' + bc.coveredCount + '/' + bc.regionCount + ' 个部位 ' + tail;
   }
 
   /* ---------------- 我的 / Pro ---------------- */
