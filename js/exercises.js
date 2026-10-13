@@ -1116,11 +1116,58 @@
     return { ok: true, payload: exportPayload(obj) };
   }
 
+  /* ================= 训练热力图（v2.1）=================
+   * GitHub 风贡献图：把每天训练点分桶、按周排成列。与每日目标环共用同一套“训练点”
+   * 口径（recPoints）：计次 1 有效=1 点、计时每 10s=1 点、关卡得分÷3。 */
+  function recPoints(r) {
+    if (!r || !r.mode) return 0;
+    const v = Number(r.valid) || 0;
+    return r.mode === 'game' ? Math.round(v / 3) : r.mode === 'time' ? Math.round(v / 10) : v;
+  }
+
+  function buildHeatmap(records, opts) {
+    const o = opts || {};
+    const ds = t => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); };
+    const mondayStart = t => { const s = ds(t); const wd = (new Date(s).getDay() + 6) % 7; return s - wd * 864e5; };
+    const now = Number(o.today) || Date.now();
+    const weeks = Math.max(1, Math.min(53, (o.weeks || 12) | 0));
+    const goal = (o.dailyGoal | 0) > 0 ? (o.dailyGoal | 0) : 0;
+    const thr = goal > 0 ? [goal * 0.34, goal * 0.67, goal] : [5, 10, 15];   // level 1..4 边界（只需三个上界）
+    const rs = Array.isArray(records) ? records : [];
+    const ptsByDay = {};
+    rs.forEach(r => { if (!r || !Number.isFinite(r.ts)) return; const k = ds(r.ts); ptsByDay[k] = (ptsByDay[k] || 0) + recPoints(r); });
+    const firstMonday = mondayStart(now - (weeks - 1) * 7 * 864e5);
+    const todayS = ds(now);
+    const cols = [];
+    let prevMonth = -1;
+    for (let w = 0; w < weeks; w++) {
+      const colStart = firstMonday + w * 7 * 864e5;
+      const days = [];
+      for (let d = 0; d < 7; d++) {
+        const ts = colStart + d * 864e5;
+        const points = ptsByDay[ts] || 0;
+        const level = points <= 0 ? 0 : points >= thr[2] ? 4 : points >= thr[1] ? 3 : points >= thr[0] ? 2 : 1;
+        days.push({ ts, points, level, future: ts > todayS, isToday: ts === todayS });
+      }
+      const m = new Date(colStart).getMonth();
+      const month = (m !== prevMonth) ? (m + 1) : null;    // 只在跨入新月的首列标月份
+      prevMonth = m;
+      cols.push({ days, month, startTs: colStart });
+    }
+    let total = 0, active = 0;
+    cols.forEach(c => c.days.forEach(dy => { if (dy.future) return; total += dy.points; if (dy.points > 0) active++; }));
+    let streak = 0, cursor = todayS;                       // 今天未练则从昨天起算，往回数连续
+    if ((ptsByDay[cursor] || 0) === 0) cursor -= 864e5;
+    while (cursor >= firstMonday && (ptsByDay[cursor] || 0) > 0) { streak++; cursor -= 864e5; }
+    return { weeks: cols, total, active, streak, windowDays: weeks * 7, goal };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
+    recPoints, buildHeatmap,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

@@ -670,4 +670,59 @@ function mkHand(tipDist) {
   console.log('[bk] 全部断言通过');
 }
 
+/* ================= v2.1 训练热力图 recPoints / buildHeatmap ================= */
+{
+  const D = 864e5;
+  const fail = m => { console.log('[heat] FAIL:', m); process.exit(1); };
+
+  /* --- recPoints 四路口径：计次直取 / 计时每 10s / 关卡÷3 / 非法→0 --- */
+  if (X.recPoints({ mode: 'reps', valid: 12 }) !== 12) fail('reps 12');
+  if (X.recPoints({ mode: 'time', valid: 45 }) !== 5) fail('time 45→5');
+  if (X.recPoints({ mode: 'game', valid: 21 }) !== 7) fail('game 21→7');
+  if (X.recPoints(null) !== 0) fail('null→0');
+  if (X.recPoints({}) !== 0) fail('无 mode→0');
+  console.log('[heat] recPoints 四路口径 OK');
+
+  /* --- 空历史：结构完整、全 0 --- */
+  const todayNoon = new Date(2026, 9, 14, 12).getTime();   // 周三（2026-10-12 为周一）
+  const empty = X.buildHeatmap([], { today: todayNoon, weeks: 12 });
+  if (empty.weeks.length !== 12) fail('空历史 weeks 数');
+  if (!empty.weeks.every(c => c.days.length === 7)) fail('每周非 7 天');
+  if (empty.total !== 0 || empty.active !== 0 || empty.streak !== 0) fail('空历史应有 total/active/streak=0');
+  if (typeof empty.weeks[0].month !== 'number') fail('首列应标月份 number');
+  console.log('[heat] 空历史结构 OK, weeks[0].month =', empty.weeks[0].month);
+
+  /* --- 有记录分桶：无 goal 走绝对阈值 [5,10,15] 铺满 L1..L4 --- */
+  const day0 = new Date(2026, 9, 14).getTime();            // 今天 00:00（周三）
+  const mk = (off, mode, valid) => ({ ts: day0 - off * D, mode, valid });
+  const recs = [mk(0, 'reps', 15), mk(1, 'reps', 10), mk(2, 'reps', 6), mk(20, 'time', 30)];
+  const hm = X.buildHeatmap(recs, { today: todayNoon, weeks: 12 });
+  if (hm.total !== 34) fail('total 期望 34 实际 ' + hm.total);
+  if (hm.active !== 4) fail('active 期望 4 实际 ' + hm.active);
+  if (hm.streak !== 3) fail('streak 期望 3（周三/二/一连续）实际 ' + hm.streak);
+  /* 末列 = 本周（周一开头），周三 index=2，之后 Thu/Fri/Sat/Sun = 4 个 future 格 */
+  const lastCol = hm.weeks[hm.weeks.length - 1];
+  const nFuture = lastCol.days.filter(d => d.future).length;
+  if (nFuture !== 4) fail('末列 future 天数期望 4 实际 ' + nFuture);
+  /* 等级正确：15→L4, 10→L3, 6→L2, 3(时 30s)→L1 */
+  const lv = ts => { for (const c of hm.weeks) for (const d of c.days) if (d.ts === ts) return d.level; return null; };
+  if (lv(day0) !== 4) fail('今天 15 点应 L4, 实际 ' + lv(day0));
+  if (lv(day0 - D) !== 3) fail('昨天 10 点应 L3, 实际 ' + lv(day0 - D));
+  if (lv(day0 - 2 * D) !== 2) fail('前天 6 点应 L2, 实际 ' + lv(day0 - 2 * D));
+  if (lv(day0 - 20 * D) !== 1) fail('20 天前 3 点应 L1, 实际 ' + lv(day0 - 20 * D));
+  if (!hm.weeks.every(c => c.days.every(d => Number.isInteger(d.level) && d.level >= 0 && d.level <= 4))) fail('level 越界');
+  const todayCell = lastCol.days.find(d => d.isToday);
+  if (!todayCell || todayCell.ts !== day0) fail('isToday 应落在今天');
+  console.log('[heat] 分桶/等级/未来格/连续 OK, total/streak =', hm.total, hm.streak);
+
+  /* --- 有 goal：阈值随每日目标缩放，不得 NaN，等级仍 0..4 --- */
+  const hmg = X.buildHeatmap(recs, { today: todayNoon, weeks: 12, dailyGoal: 30 });
+  if (hmg.goal !== 30) fail('goal 未透传');
+  if (!Number.isFinite(hmg.total) || hmg.total !== 34) fail('goal 模式 total 变了');
+  if (!hmg.weeks.every(c => c.days.every(d => d.level >= 0 && d.level <= 4))) fail('goal 模式 level 越界');
+  console.log('[heat] goal 缩放阈值 OK');
+
+  console.log('[heat] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

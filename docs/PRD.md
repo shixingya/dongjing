@@ -109,6 +109,8 @@
 
 - ✅ **v2.0 已交付（数据备份：把无后端的本地数据变成可存走/换机器的 JSON）**：① 纯逻辑落在 `exercises.js`（`exportPayload / parseImport / sanitizeRecords / mergeRecords`），序列化与校验都能离线单测；文件 IO（Blob 下载 / FileReader 读取）只在 `app.js`。② **外部文件一律不信任**：`exportPayload` 只导白名单字段（运行时临时态不入备份）、`sanitizeRecords` 逐条校类型（缺 ts/valid 或 mode 非法直接丢）、`parseImport` 先验 JSON 再验 `app==='dongjing'` 标记与 records 形状，返回 `{ok,why}`（why=json/app/shape）让 UI 说清拒绝原因。③ **两种导入语义**：默认整份覆盖；勾“仅并训练记录”走 `mergeRecords`，以 `ts+ex` 为键去重、按时间排序，重复导入同一份不会让记录翻倍。④ **修一个导出真实 bug**（浏览器冒烟拓到）：最初 `sanitizeRecords` 用 `ts|0` 把 13 位毫秒时间戳截成 32 位负数（1700000000000→-807049216），会连带弄坏连续打卡/周课表的“近 N 天”窗口；改 `Math.trunc` 保留完整精度，单测补了大 ts round-trip 断言防回归。（注：导出走浏览器下载、不上传任何服务器，与隐私承诺一致。）
 
+- ✅ **v2.1 已交付（训练热力图：把“近三个月到底坚不坚持”一眼看清）**：① 分桶与等级全放 `exercises.js` 纯函数 `buildHeatmap(records, {today, weeks, dailyGoal})`（按周列优先排布、周一开头，返回每周 7 格 + 每格 `{ts,points,level,future,isToday}` + total/active/streak），渲染只负责画 DOM，可完整离线单测；② **训练点口径全工程唯一**：抽出一个 `recPoints(r)` 纯函数（计次 1 有效=1 点 / 计时每 10s=1 点 / 关卡得分÷3），今日目标环的 `todayPoints()` 与热力图共用同一个函数，不再有两套算法；③ **等级跟着目标走**：设了 `dailyGoal` 就按 34%/67%/100% 分 L2/L3/L4（没达到目标也能看出深浅），没设则用绝对档位 `[5,10,15]`（修正了初版 `[1,10,20,30]` 只用前三个边界、导致永远跳不过 L1/L2 的分配缺陷）；④ **未来格与今日格区分**：本周周三是今天、周四~周日尚未到期→`future` 空色描边不计入 total/active，今天高亮外框；streak 与现有 `streakDays()` 一致地“今天未练就从昨天起算”；⑤ 单测覆盖 recPoints 四路、空历史结构、分桶/等级/未来格/连续、goal 缩放不 NaN；浏览器冒烟以注入记录驱动渲染出 l1~l4 全档位与正确 total/active/streak（并实测验证 goal 模式阈值随每日目标缩放、绝对模式与 goal 模式分档一致）。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；

@@ -1543,12 +1543,10 @@
     while (days.has(d)) { n++; d -= 864e5; }
     return n;
   }
-  /* 训练点：计次动作 1 有效次=1 点，计时动作每 10s=1 点，关卡得分÷3（玩也要给进度感） */
+  /* 训练点口径统一走 X.recPoints（exercises.js），与热力图共用同一算法 */
   function todayPoints() {
     const s = dayStart(Date.now());
-    return DB.records.filter(r => r.ts >= s)
-      .reduce((a, r) => a + (r.mode === 'game' ? Math.round(r.valid / 3)
-        : r.mode === 'time' ? Math.round(r.valid / 10) : r.valid), 0);
+    return DB.records.filter(r => r.ts >= s).reduce((a, r) => a + X.recPoints(r), 0);
   }
   function renderGoal() {
     const goal = DB.set.dailyGoal | 0, p = todayPoints();
@@ -1561,6 +1559,7 @@
 
   /* ---------------- 报告页 ---------------- */
   function renderReport() {
+    renderHeatmap();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1595,6 +1594,25 @@
         DB.records.slice(0, 40).map(r =>
           '<div class="hist-row"><span>' + fmtDate(r.ts) + '</span><span>' + r.name + (r.mode === 'game' ? ' 🎮' : (r.mode === 'time' ? '（' + r.valid + 's）' : '')) + '</span><b>' + (r.mode === 'game' ? r.valid + ' 分' : r.mode === 'time' ? r.valid + 's' : r.valid + '/' + r.attempts) + '</span><span>' + r.score + '</span><span>' + r.cal + '</span></div>').join('')
       : '<div class="empty-tip">暂无记录，去首页开始第一次训练吧</div>';
+  }
+
+  /* 训练热力图：DOM 网格（每列一周、上到下周一~周日），hover 用 title 提示日期与点数 */
+  function renderHeatmap() {
+    const colsEl = $('#heatmap'); if (!colsEl) return;
+    const hm = X.buildHeatmap(DB.records, { today: Date.now(), weeks: 12, dailyGoal: DB.set.dailyGoal | 0 });
+    const dlab = ts => { const d = new Date(ts); return (d.getMonth() + 1) + '月' + d.getDate() + '日'; };
+    $('#hm-months').innerHTML = hm.weeks.map(c => '<span class="hm-mc">' + (c.month ? c.month + '月' : '') + '</span>').join('');
+    colsEl.innerHTML = hm.weeks.map(c =>
+      '<div class="hm-col">' + c.days.map(d => {
+        const cls = d.future ? 'future' : ('l' + d.level);
+        const tip = d.future ? dlab(d.ts) + ' · 未到期'
+          : dlab(d.ts) + ' · ' + (d.points > 0 ? d.points + ' 训练点' : '休息');
+        return '<i class="hm-cell ' + cls + (d.isToday ? ' today' : '') + '" title="' + tip + '"></i>';
+      }).join('') + '</div>').join('');
+    const sum = $('#hm-sum');
+    if (sum) sum.textContent = hm.total > 0
+      ? '近 ' + hm.windowDays + ' 天 · 累计 ' + hm.total + ' 训练点 · 活跃 ' + hm.active + ' 天 · 连续打卡 ' + hm.streak + ' 天'
+      : '近 ' + hm.windowDays + ' 天还没有训练记录，练一次这里就会亮起来 ✦';
   }
 
   /* ---------------- 我的 / Pro ---------------- */

@@ -337,6 +337,23 @@ h3{font-size:18px}
   .mask-box{max-width:92%}
 }
 /* 矮屏弹窗不要撑爆：内部可滚，dvh 避免 iOS Safari 工具栏遮挡 */
+/* ---- v2.1 训练热力图 ---- */
+.hm-card .hm-wrap{overflow-x:auto; padding-bottom:4px}
+.hm-months{display:flex; gap:3px; min-width:max-content; margin-bottom:5px}
+.hm-mc{width:13px; flex:0 0 13px; font-size:10px; color:var(--muted); white-space:nowrap}
+.hm-cols{display:flex; gap:3px; min-width:max-content}
+.hm-col{display:flex; flex-direction:column; gap:3px}
+.hm-cell{width:13px; height:13px; border-radius:2px; background:var(--bg2); display:inline-block; box-sizing:border-box}
+.hm-cell.l0{background:#1a2434}
+.hm-cell.l1{background:rgba(37,182,240,.30)}
+.hm-cell.l2{background:rgba(37,182,240,.55)}
+.hm-cell.l3{background:rgba(37,182,240,.78)}
+.hm-cell.l4{background:var(--hl2)}
+.hm-cell.future{background:transparent; border:1px dashed var(--line)}
+.hm-cell.today{outline:1.5px solid var(--hl); outline-offset:1px}
+.hm-legend{display:flex; align-items:center; gap:4px; margin-top:9px; font-size:11px; color:var(--muted)}
+.hm-legend .hm-cell{width:11px; height:11px}
+
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}
   .modal-box canvas{max-height:38vh}
