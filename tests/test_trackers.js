@@ -811,4 +811,42 @@ function mkHand(tipDist) {
   console.log('[wow] 全部断言通过, up/down/flat/空/窗口 均 OK');
 }
 
+/* ================= v2.4 训练时段分布 daypartStats ================= */
+{
+  const fail = m => { console.log('[dp] FAIL:', m); process.exit(1); };
+  if (X.DAYPARTS.length !== 4) fail('时段数应为 4');
+
+  /* 空数据 */
+  const e = X.daypartStats([]);
+  if (e.total !== 0 || e.busiestKey !== null) fail('空数据应 total=0/busiestKey=null');
+
+  /* 混合数据：按小时分桶 */
+  const at = h => new Date(2026, 9, 14, h, 30).getTime();
+  const recs = [
+    { ts: at(6), mode: 'reps', valid: 20, score: 90 }, { ts: at(7), mode: 'reps', valid: 10, score: 80 },
+    { ts: at(12), mode: 'time', valid: 100, score: 70 }, { ts: at(18), mode: 'reps', valid: 15, score: 60 },
+    { ts: at(23), mode: 'game', valid: 30, score: 50 }, { ts: at(2), mode: 'reps', valid: 5, score: 40 }
+  ];
+  const r = X.daypartStats(recs);
+  const by = k => r.parts.find(p => p.key === k);
+  if (r.total !== 6) fail('total 期望 6 实际 ' + r.total);
+  if (by('morn').sessions !== 2 || by('morn').points !== 30) fail('清晨 2 节 30 点: ' + by('morn').sessions + '/' + by('morn').points);
+  if (by('morn').avgScore !== 85) fail('清晨均分期望 85 实际 ' + by('morn').avgScore);
+  if (by('day').sessions !== 1 || by('day').points !== 10) fail('日间 1 节 time100s→10 点: ' + by('day').sessions + '/' + by('day').points);
+  if (by('eve').sessions !== 1) fail('傍晚 1 节');
+  if (by('night').sessions !== 2 || by('night').points !== 15) fail('夜间 game30→10 + reps5→5 = 2 节 15 点: ' + by('night').sessions + '/' + by('night').points);
+  if (r.busiestKey !== 'morn') fail('清晨/夜间各 2 节平手→按点数取胜应为清晨, 实际 ' + r.busiestKey);
+  console.log('[dp] 分桶/均分/平手按点数 busiest =', r.busiestName, '(' + r.busiestKey + ')');
+
+  /* 纯按节数优先：某时段节数最多就当选，与点数无关 */
+  const r2 = X.daypartStats([{ ts: at(18), mode: 'reps', valid: 1 }, { ts: at(19), mode: 'reps', valid: 1 }, { ts: at(6), mode: 'reps', valid: 50 }]);
+  if (r2.busiestKey !== 'eve') fail('傍晚 2 节应多于清晨 1 节当选, 实际 ' + r2.busiestKey);
+
+  /* 非法记录丢弃不崩 */
+  const r3 = X.daypartStats([null, { ts: NaN }, { ts: at(9) }]);
+  if (r3.total !== 1) fail('非法记录应丢弃, 实际 total=' + r3.total);
+
+  console.log('[dp] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

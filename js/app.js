@@ -1561,6 +1561,7 @@
   function renderReport() {
     renderHeatmap();
     renderAchievements();
+    renderDaypart();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1635,6 +1636,24 @@
     }).join('');
     const sum = $('#ach-sum');
     if (sum) sum.textContent = '已点亮 ' + ach.earned + ' / ' + ach.total + ' 枚';
+  }
+
+  /* 训练时段分布：daypartStats 纯逻辑算四时段节数/点数/均分，这里只画横向迷你条 */
+  function renderDaypart() {
+    const box = $('#dp-rows'); if (!box) return;
+    const dp = X.daypartStats(DB.records);
+    if (!dp.total) { box.innerHTML = '<div class="empty-tip">还没有训练记录，练几次就能看出你习惯什么时段</div>'; const s0 = $('#dp-sum'); if (s0) s0.textContent = ''; return; }
+    const max = Math.max(1, ...dp.parts.map(p => p.sessions));
+    box.innerHTML = dp.parts.map(p => {
+      const pctw = Math.round(p.sessions / max * 100);
+      const extra = p.sessions ? (p.points + ' 点' + (p.avgScore ? ' · 均分 ' + p.avgScore : '')) : '未训练';
+      return '<div class="dp-row' + (p.key === dp.busiestKey ? ' best' : '') + '" title="' + p.name + ' ' + p.hour + ' · ' + p.sessions + ' 节 · ' + extra + '">' +
+        '<span class="dp-name">' + p.name + '</span>' +
+        '<span class="dp-bar"><i style="width:' + pctw + '%"></i></span>' +
+        '<span class="dp-num">' + (p.sessions || '—') + '</span></div>';
+    }).join('');
+    const sum = $('#dp-sum');
+    if (sum) sum.textContent = '你最常在 ' + dp.busiestName + '训练（共 ' + dp.total + ' 节）';
   }
 
   /* ---------------- 我的 / Pro ---------------- */

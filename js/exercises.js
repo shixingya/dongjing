@@ -1260,12 +1260,44 @@
     return { cur, prev, dPoints, dPct, verdict };
   }
 
+  /* ================= 训练时段分布（v2.4）=================
+   * 按小时把记录分入四个时段（夜间跨 0 点），统计节数/训练点/平均评分，
+   * 找出最常训练的时段。口径同样复用 recPoints。 */
+  const DAYPARTS = [
+    { key: 'morn',  name: '清晨', hour: '5–11',  from: 5,  to: 11 },
+    { key: 'day',   name: '日间', hour: '11–17', from: 11, to: 17 },
+    { key: 'eve',   name: '傍晚', hour: '17–22', from: 17, to: 22 },
+    { key: 'night', name: '夜间', hour: '22–5',  from: 22, to: 5 }
+  ];
+  function daypartClassify(h) {
+    return (h >= 5 && h < 11) ? 'morn' : (h >= 11 && h < 17) ? 'day' : (h >= 17 && h < 22) ? 'eve' : 'night';
+  }
+  function daypartStats(records) {
+    const rs = Array.isArray(records) ? records : [];
+    const acc = { morn: b(), day: b(), eve: b(), night: b() };
+    function b() { return { sessions: 0, points: 0, scoreSum: 0, scoreN: 0 }; }
+    rs.forEach(r => {
+      if (!r || !Number.isFinite(r.ts)) return;
+      const p = acc[daypartClassify(new Date(r.ts).getHours())];
+      p.sessions++; p.points += recPoints(r);
+      if (Number.isFinite(r.score)) { p.scoreSum += r.score; p.scoreN++; }
+    });
+    const parts = DAYPARTS.map(d => {
+      const a = acc[d.key];
+      return { key: d.key, name: d.name, hour: d.hour, sessions: a.sessions, points: a.points, avgScore: a.scoreN ? Math.round(a.scoreSum / a.scoreN) : 0 };
+    });
+    const total = parts.reduce((s, p) => s + p.sessions, 0);
+    let busiest = parts[0];
+    parts.forEach(p => { if (p.sessions > busiest.sessions || (p.sessions === busiest.sessions && p.points > busiest.points)) busiest = p; });
+    return { parts, total, busiestKey: total ? busiest.key : null, busiestName: total ? busiest.name : '' };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

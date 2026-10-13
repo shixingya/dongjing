@@ -115,6 +115,8 @@
 
 - ✅ **v2.3 已交付（周环比小结：把“这周比上周进还是退”一句话讲清）**：① `weekCompare(records, {today})` 纯函数—按周一起算分本周/上周两个窗口，用 `recPoints` 口径累加训练点（同时统计 sessions / 去重活跃 days），返回 `{cur,prev,dPoints,dPct,verdict}`；② **结论分五种文案**：两周都空→鼓动开始、上周空→“好开头”、本周空→“先练一组破零”、±15% 内→“基本持平”、≥+15%→绿字“多 X%”、≤-15%→橙字“少 X%…安排一次循环跟练”；③ **口径不另起炉灶**（继续复用 recPoints，与目标环/热力图/成就一套），超出两周窗口的老记录不计入；④ 渲染只在“本周训练”柱状图下方写一行 `#wow-txt`，按 dPoints 正/负加 up(绿)/down(橙) 色类；⑤ 单测覆盖 up/down/flat/空/本周零/同天不重复计天/两周窗口边界共7 组；浏览器冒烟注入“本周50/上周10”与“本周0/上周30”两组数据，逐字比对 DOM 文案与 `DJX.weekCompare` 完全一致、up/down 两态色类正确、0 console error。
 
+- ✅ **v2.4 已交付（训练时段分布：发现“你一天什么时候练得最多最好”）**：① `daypartStats(records)` 纯函数—按 `new Date(ts).getHours()` 分入固定四个时段（清晨 5–11 / 日间 11–17 / 傍晚 17–22 / 夜间 22–5 跨 0 点），逐时段统计 sessions / points（复用 `recPoints`）/ avgScore，返回 `{parts,total,busiestKey,busiestName}`；② **busiest 按节数优先、平手按点数决胜**（“常练”而非“某次练得多”）；空数据/非法记录（null / NaN ts）丢弃不崩；③ 渲染只画四行横向迷你条（宽=sessions/max）、最忙一行加 `best` 高亮色，hover title 给完整释义，卡片副标题“你最常在 X训练（共 N 节）”；④ 单测覆盖空数据、四时段分桶与均分、平手按点数决胜、纯节数优先、非法记录丢弃；浏览器冒烟注入“傍晚 3 节 + 其余各 1 节”记录，DOM 四行与 `DJX.daypartStats` 逐行一致、best 行与 busiestKey 对齐、总 6 节、副标题文案正确、0 console error。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；
