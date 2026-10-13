@@ -1008,4 +1008,44 @@ function mkHand(tipDist) {
   console.log('[lt] 全部断言通过');
 }
 
+/* ================= v2.9 纠错改善趋势 issueTrend ================= */
+{
+  const fail = m => { console.log('[it] FAIL:', m); process.exit(1); };
+  const t = d => new Date(2026, 9, d, 8).getTime();
+
+  /* 不够（< 2 条）*/
+  if (X.issueTrend([]).enough !== false) fail('空数据 enough 应 false');
+  const one = X.issueTrend([{ ts: t(1), issues: { a: 3 } }]);
+  if (one.enough !== false || one.items.length !== 0) fail('1 条应 enough=false items 空');
+
+  /* 对半分：older=[d1,d2] recent=[d3,d4]（按 ts 升序，故意乱序传入验证排序）*/
+  const recs = [
+    { ts: t(4), issues: { sqKnee: 1, wsLean: 3 } },
+    { ts: t(2), issues: { sqKnee: 8, lnAsym: 2 } },
+    { ts: t(1), issues: { sqKnee: 9 } },
+    { ts: t(3), issues: { sqKnee: 1 } }
+  ];
+  const r = X.issueTrend(recs);
+  if (!r.enough || r.olderN !== 2 || r.recentN !== 2) fail('应 olderN2/recentN2 实际 ' + r.olderN + '/' + r.recentN);
+  const by = {}; r.items.forEach(i => by[i.key] = i);
+  if (by.sqKnee.older !== 17 || by.sqKnee.recent !== 2) fail('sqKnee older17/recent2 实际 ' + by.sqKnee.older + '/' + by.sqKnee.recent);
+  if (by.sqKnee.trend !== 'better') fail('sqKnee 应 better 实际 ' + by.sqKnee.trend);
+  if (by.wsLean.trend !== 'new') fail('wsLean 应 new');
+  if (by.lnAsym.trend !== 'gone') fail('lnAsym 应 gone');
+  if (r.items[0].key !== 'sqKnee') fail('首位应 total 最大的 sqKnee 实际 ' + r.items[0].key);
+
+  /* flat：两半区频率基本持平（older 每节 2 / recent 每节 2）*/
+  const fl = X.issueTrend([
+    { ts: t(1), issues: { sqKnee: 2 } }, { ts: t(2), issues: { sqKnee: 2 } },
+    { ts: t(3), issues: { sqKnee: 2 } }, { ts: t(4), issues: { sqKnee: 2 } }
+  ]);
+  if (fl.items[0].trend !== 'flat') fail('每节频率持平应 flat 实际 ' + fl.items[0].trend);
+
+  /* 全 null/无 ts/无 issues 不崩 */
+  const z = X.issueTrend([null, { issues: {} }, { ts: t(5) }, { ts: t(6), issues: { sqKnee: 0 } }]);
+  if (!z.enough || z.items.length !== 0) fail('全无效/零 issues 应 items 空');
+
+  console.log('[it] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

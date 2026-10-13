@@ -125,6 +125,8 @@
 
 - ✅ **v2.8 已交付（生涯总览：把“你从开始到现在一共练了多少”一眼说完）**：① `lifetimeStats(records)` 纯函数—跨全部记录累加 `{sessions,points,calories,secs,activeDays,distinctEx,exTotal,firstTs,lastTs,months,busiestMonth}`；points 复用 `recPoints`、calories/secs 逐条累加（非法/无 ts 记录丢弃）、activeDays 按自然日去重、distinctEx 只数真实动作库 id（game-/circuit 不计）；② **busiestMonth** 按年-月分桶取节数最多的一个月（label 形如“2026年10月”）；空数据 sessions=0/busiestMonth=null；③ 渲染为报告页顶部八格统计宫格（总训练/训练点/运动时长/消耗热量/活跃天数/涵盖动作/坚持跨度/最活跃月，后两格 wide 跨两列），时长自动换算“X 时 Y 分”/“X 分钟”，hover 看口径与首末日期，副标题“从 X 开始已累计 N 节”；④ 单测覆盖空数据全 0/busiestMonth null、跨月混合数据 sessions4/points38/calories26/secs370/activeDays3（同日两条算 1 天）/distinctEx2（game 不计）/months2/firstTs 最早/最活跃月 sessions3、time+game 换算；浏览器冒烟注入“深蹲×2（不同天）+ 平板（计时）+ 关卡（与平板同天）”，DOM 8 格与 `DJX.lifetimeStats` 逐字段一致、总 4 节/38 点/26 千卡/3 天/动作 2/13/最活跃月“2026年10月”、0 console error。
 
+- ✅ **v2.9 已交付（纠错改善趋势：“老毛病到底改改了没”）**：① `issueTrend(records)` 纯函数—把有合法 ts 的记录按时间升序对半分成“之前/最近”两段（`half = floor(n/2)`，不靠外部时间基准、只相对分），逐段累加 `r.issues` 里的错误次数，比较两个半区“每节平均犯几次”的频率；② **五种判定**：`better`（最近 ≤ 之前×0.7）/`gone`（之前有、最近零）/`worse`（最近 ≥ 之前×1.3）/`new`（之前零、最近有）/`flat`（其余），按总次数降序取前几项；③ **不足 2 节 / 全无效记录 / 零 issues 不崩**（`enough=false` 或 `items` 空）；④ 渲染行列表（问题文案 + `旧→新` 次数 + 变化标签），好转类（better/gone）绿、恶化类（worse/new）橙，副标题“对比最近 N 节与之前 M 节 · X 项在好转”；⑤ 与首页教练记忆同一思路但拉成时间轴趋势（ISSUES 字典复用，不新建口径）；⑥ 单测覆盖 <2 条 enough=false、乱序传入验证排序、older17>recent 2=better/new/gone 三路、每节频率持平=flat、全无效/零 issues items 空；浏览器冒烟注入 5 节（sqLean 前半 11→1、wsUp 仅后半、lnAsym 仅前半），DOM 3 行与 `DJX.issueTrend` 逐项 chg/msg/tag class 零偏差、better/new/gone 三路正确、副标题“2 项在好转”、0 console error。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；

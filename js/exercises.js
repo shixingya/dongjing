@@ -1425,12 +1425,41 @@
     };
   }
 
+  /* ================= 纠错改善趋势（v2.9）=================
+   * 把有合法 ts 的记录按时间升序对半分成“之前 / 最近”，逐条累加 r.issues 里的错误次数，
+   * 比较两个半区“每节平均犯几次”的频率，判每个常见问题是改善/加重/消失/新出现。
+   * 与教练记忆同一思路，但拉成时间轴上的趋势。纯函数可离线单测。 */
+  function issueTrend(records) {
+    const rs = (Array.isArray(records) ? records : []).filter(r => r && Number.isFinite(r.ts));
+    rs.sort((a, b) => a.ts - b.ts);
+    const n = rs.length;
+    if (n < 2) return { items: [], enough: false, olderN: 0, recentN: 0 };
+    const half = Math.floor(n / 2);
+    const older = rs.slice(0, half), recent = rs.slice(half);
+    const tally = g => { const o = {}; g.forEach(r => Object.entries(r.issues || {}).forEach(([k, v]) => { const c = Number(v) || 0; if (c > 0) o[k] = (o[k] || 0) + c; })); return o; };
+    const oT = tally(older), rT = tally(recent);
+    const keys = new Set([...Object.keys(oT), ...Object.keys(rT)]);
+    const items = [...keys].map(k => {
+      const oC = oT[k] || 0, rC = rT[k] || 0;
+      const oRate = older.length ? oC / older.length : 0;
+      const rRate = recent.length ? rC / recent.length : 0;
+      let trend;
+      if (oC === 0 && rC > 0) trend = 'new';
+      else if (rC === 0 && oC > 0) trend = 'gone';
+      else if (rRate <= oRate * 0.7) trend = 'better';
+      else if (rRate >= oRate * 1.3) trend = 'worse';
+      else trend = 'flat';
+      return { key: k, total: oC + rC, older: oC, recent: rC, oRate, rRate, trend };
+    }).filter(x => x.total > 0).sort((a, b) => b.total - a.total);
+    return { items, enough: true, olderN: older.length, recentN: recent.length };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

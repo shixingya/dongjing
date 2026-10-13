@@ -1566,6 +1566,7 @@
     renderBests();
     renderRhythm();
     renderCoverage();
+    renderIssueTrend();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1714,6 +1715,25 @@
     }).join('');
     const sum = $('#wd-sum');
     if (sum) sum.textContent = '你最勤的是 ' + wd.busiestName + '（' + wd.busiestSessions + ' 节）· 周末占 ' + wd.weekendPct + '%';
+  }
+
+  /* 纠错改善趋势：issueTrend 纯逻辑对半分“之前/最近”比错误频率，这里只列前几项与变化标签 */
+  function renderIssueTrend() {
+    const box = $('#it-list'); if (!box) return;
+    const sum = $('#it-sum');
+    const it = X.issueTrend(DB.records);
+    if (!it.enough) { box.innerHTML = '<div class="empty-tip">至少练满 2 节，才能对比最近和之前的动作问题变化</div>'; if (sum) sum.textContent = ''; return; }
+    if (!it.items.length) { box.innerHTML = '<div class="empty-tip">最近训练没记到明显动作问题，姿势保持得不错 ✦</div>'; if (sum) sum.textContent = ''; return; }
+    const TREND = { better: { t: '↓ 改善', c: 'good' }, gone: { t: '✓ 已消失', c: 'good' }, worse: { t: '↑ 变多', c: 'bad' }, new: { t: '✚ 新出现', c: 'bad' }, flat: { t: '· 持平', c: '' } };
+    box.innerHTML = it.items.slice(0, 5).map(x => {
+      const tr = TREND[x.trend], msg = X.ISSUES[x.key] ? X.ISSUES[x.key].msg : x.key;
+      return '<div class="it-row" title="之前 ' + it.olderN + ' 节出现 ' + x.older + ' 次 · 最近 ' + it.recentN + ' 节出现 ' + x.recent + ' 次">' +
+        '<span class="it-msg">' + msg + '</span>' +
+        '<span class="it-chg">' + x.older + ' → ' + x.recent + '</span>' +
+        '<span class="it-tag ' + (tr.c || '') + '">' + tr.t + '</span></div>';
+    }).join('');
+    const better = it.items.filter(x => x.trend === 'better' || x.trend === 'gone').length;
+    if (sum) sum.textContent = '对比最近 ' + it.recentN + ' 节与之前 ' + it.olderN + ' 节 · ' + better + ' 项在好转';
   }
 
   /* 部位覆盖度：bodyCoverage 纯逻辑按五大块聚合节数/点数/命中动作，这里只列五行与空白提示 */
