@@ -280,6 +280,67 @@ function mkHand(tipDist) {
   if (g.days[5].kind !== 'game' || g.next.type !== 'game' || !X.GAME_KINDS[g.next.kind]) process.exit(1);
 }
 
+/* --- 侧面体态：合成矢状面链条，验证分级/方向文案/可见性兼容/正侧合并 --- */
+{
+  /* bodyH = 踝(580) - 鼻(100) = 480px → 1% = 4.8px */
+  const mkSide = o => {
+    const l = mkL();
+    const put = (i, x, y) => { l[i] = { x, y, v: 1 }; };
+    put(0, o.head, 100); put(7, o.ear, 110); put(8, o.ear, 110);
+    put(11, o.sh, 220); put(12, o.sh, 220);
+    put(23, o.hip, 360); put(24, o.hip, 360);
+    put(25, o.knee, 470); put(26, o.knee, 470);
+    put(27, o.an, 580); put(28, o.an, 580);
+    if (o.leftOnly) [12, 24, 26, 28, 8].forEach(i => { l[i] = { x: 0, y: 0, v: 0 }; });
+    if (o.noAnkle) [27, 28].forEach(i => { l[i] = { x: 0, y: 0, v: 0 }; });
+    return l;
+  };
+  const frames = (o, n) => Array.from({ length: n || 5 }, () => mkSide(o));
+  const lv = r => r.items.map(it => it.name.slice(0, 3) + ':' + it.cls).join(' ');
+
+  const good = X.analyzePostureSide(frames({ head: 300, ear: 300, sh: 300, hip: 300, knee: 300, an: 300 }));
+  console.log('[侧面-对齐] score =', good.score, lv(good));
+  if (good.score !== 100 || good.items.length !== 4 || good.items.some(it => it.cls !== 'a')) process.exit(1);
+
+  const bad = X.analyzePostureSide(frames({ head: 300, ear: 360, sh: 330, hip: 312, knee: 312, an: 300 }));
+  console.log('[侧面-全偏差] score =', bad.score, lv(bad), '|', bad.items.map(it => it.dir).filter(Boolean).join(' / '));
+  if (bad.items.length !== 4 || bad.items.some(it => it.cls !== 'c') || bad.score !== 40) process.exit(1);
+  if (!/耳在肩前方/.test(bad.items[0].dir) || !/肩在髋前方/.test(bad.items[1].dir)) { console.log('方向文案错'); process.exit(1); }
+
+  const mild = X.analyzePostureSide(frames({ head: 300, ear: 322, sh: 314, hip: 308, knee: 306, an: 300 }));
+  console.log('[侧面-轻度] score =', mild.score, lv(mild));
+  if (mild.items.length !== 4 || mild.items.some(it => it.cls !== 'b') || mild.score !== 64) process.exit(1);
+
+  /* 远侧被躯干挡住：只要单侧可见也得出 4 项 */
+  const one = X.analyzePostureSide(frames({ head: 300, ear: 300, sh: 300, hip: 300, knee: 300, an: 300, leftOnly: true }));
+  console.log('[侧面-单侧] items =', one ? one.items.length : null, 'score =', one && one.score);
+  if (!one || one.items.length !== 4) process.exit(1);
+
+  /* 踝不可见 → 算不了骨盆/膝，只给上两项，不能崩 */
+  const noAn = X.analyzePostureSide(frames({ head: 300, ear: 360, sh: 330, hip: 312, knee: 312, an: 300, noAnkle: true }));
+  console.log('[侧面-无踝] items =', noAn.items.length, lv(noAn));
+  if (noAn.items.length !== 2) process.exit(1);
+  if (X.analyzePostureSide([]) !== null || X.analyzePostureSide(null) !== null) process.exit(1);
+
+  /* 正面 + 侧面合并：分分取均值，条目带 view 标签 */
+  const mkFront = () => { const l = mkL();
+    const put = (i, x, y) => { l[i] = { x, y, v: 1 }; };
+    put(0, 300, 100); put(7, 290, 120); put(8, 310, 120);
+    put(11, 270, 220); put(12, 330, 220); put(23, 285, 360); put(24, 315, 360);
+    put(25, 285, 470); put(26, 315, 470); put(27, 285, 580); put(28, 315, 580);
+    return l; };
+  const front = X.analyzePosture(Array.from({ length: 5 }, mkFront));
+  if (!front || front.score !== 100) { console.log('正面基准异常', front && front.score); process.exit(1); }
+  const m2 = X.mergePosture(front, bad);
+  const m1 = X.mergePosture(front, null);
+  console.log('[合并] 正+侧 =', m2.score, 'items =', m2.items.length, 'twoView =', m2.twoView,
+    '| 仅正面 =', m1.score, m1.items.length, m1.twoView);
+  if (m2.score !== 70 || m2.items.length !== 8 || m2.twoView !== true) process.exit(1);
+  if (m2.items.filter(it => it.view === '正面').length !== 4 || m2.items.filter(it => it.view === '侧面').length !== 4) process.exit(1);
+  if (m1.score !== 100 || m1.items.length !== 4 || m1.twoView !== false) process.exit(1);
+  if (X.mergePosture(null, null) !== null) process.exit(1);
+}
+
 /* --- 元数据完整性：10 动作、keys/start 均存在，坐姿系标记 --- */
 {
   const ids = X.EXERCISES.map(e => e.id);

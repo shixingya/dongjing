@@ -1,5 +1,5 @@
 /* 动镜 DongJing · 动作引擎（纯内联数据，file:// 可运行，无 fetch）
- * 输出 window.DJX：关键点索引、几何工具、问题字典、六个动作 tracker、体态评估。
+ * 输出 window.DJX：关键点索引、几何工具、问题字典、十个动作 tracker、体态评估（正面/侧面/合并）。
  * 约定：tracker.feed(l, tMs, dt) 中 l 为像素坐标 33 点数组 [{x,y,v}]。
  * 返回 {phase, live:[issueKey], rep:null|{valid, issues:[], seconds?}}
  */
@@ -481,7 +481,7 @@
     }
   ];
 
-  /* ================= 体态评估（正面近似，v1） ================= */
+  /* ================= 体态评估（正面：左右偏差，v1）================= */
   function analyzePosture(samples) {
     if (!samples || !samples.length) return null;
     const avg = i => {
@@ -523,7 +523,67 @@
     let score = 100;
     items.forEach(it => { if (it.cls === 'b') score -= 9; else if (it.cls === 'c') score -= 20; });
     score = Math.max(40, Math.round(score));
-    return { score, items, note: 'v1 为正面单视角近似评估，侧面位增强版（骨盆前倾/圆肩精确量化）在 P1 提供。' };
+    return { score, items, note: '正面 4 项评估；侧面位（骨盆前倾/圆肩）需侧身再采一次。' };
+  }
+
+  /* ================= 体态评估（侧面位，v1.7）=================
+   * 侧面才能看到矢状面的东西：头前倾、圆肩、骨盆前倾、膝过伸。
+   * 口径：以踝-髋-肩-耳四个关键点的**前后偏移**除以身高归一，不依赖绝对像素；
+   * 侧面只要求单侧可见（远侧肢体被躯干挡住是正常事）。 */
+  function analyzePostureSide(samples) {
+    if (!samples || !samples.length) return null;
+    const avg = i => {
+      let x = 0, y = 0, n = 0;
+      samples.forEach(s => { const p = s[i]; if (p && p.v > 0.4) { x += p.x; y += p.y; n++; } });
+      return n >= samples.length * 0.3 ? { x: x / n, y: y / n, n } : null;
+    };
+    const any = (...idx) => { for (const i of idx) { const a = avg(i); if (a) return a; } return null; };
+    const ear = any(7, 8), sh = any(11, 12), hip = any(23, 24), kn = any(25, 26), an = any(27, 28);
+    if (!sh || !hip) return null;
+    const head = any(0, 7, 8) || sh;
+    const anPt = an || kn || hip;
+    const bodyH = Math.max(60, anPt.y - head.y);
+
+    /* dx > 0 表示前一个点在画面右侧；侧面拍摄时左右朝向取决于用户面向，所以取绝对值评分，方向只用于建议文案 */
+    const mk = (name, dx, goodT, mildT, labels, advice) => {
+      const pct = Math.abs(dx) / bodyH * 100;
+      const cls = pct <= goodT ? 'a' : pct <= mildT ? 'b' : 'c';
+      const level = cls === 'a' ? '良好' : cls === 'b' ? '轻度偏差' : '明显偏差';
+      return { name, view: '侧面', pct: +pct.toFixed(1), level, cls,
+        advice: cls === 'a' ? advice[0] : cls === 'b' ? advice[1] : advice[2],
+        dir: Math.abs(dx) < 1 || cls === 'a' ? '' : labels[dx > 0 ? 0 : 1] };
+    };
+    const items = [];
+    if (ear) items.push(mk('头前倾（耳-肩前后偏移）', ear.x - sh.x, 1.0, 2.2, ['耳在肩前方', '耳在肩后方'],
+        ['头颈在肩正上方，侧面看一条线很好',
+          '下巴微收（像把头顶往天花板拔），每小时做 10 次收下巴；注意屏幕高度',
+          '头前倾明显：靠墙站立（后脑贴墙收下巴）5 分钟×2，加强深颈屈肌；长时间看手机是主因，先改工位屏高']));
+    items.push(mk('圆肩 / 肩前移（肩-髋偏移）', sh.x - hip.x, 0.9, 2.0, ['肩在髋前方（圆肩）', '肩在髋后方'],
+      ['肩在髋正上方，胸腔位置正确',
+        '轻度圆肩：每天做扩胸与 YTW 各 10 次×2，减少前侧抱紧类动作',
+        '圆肩明显：放松胸小肌/胸大肌（门框拉伸 30 秒×3），强化中下斜方肌与菱形肌；别再做太多俯卧撑']));
+    if (an) items.push(mk('骨盆前倾代偿（髋-踝偏移）', hip.x - an.x, 1.1, 2.4, ['髋在踝前方（常见于骨盆前倾/顶胯）', '髋在踝后方'],
+      ['髋在踝正上方，矢状面中立',
+        '轻度前移：收紧腹部（微收尾骨）再站立，放松髂腰肌与股四头肌',
+        '髋前移明显：典型骨盆前倾代偿——每天臀桥 15 次×3 + 髂腰肌拉伸 30 秒×3；腰疼请停止跳跃类动作']))
+    if (an && kn) items.push(mk('膝过伸（膝-踝偏移）', kn.x - an.x, 1.0, 2.0, ['膝在踝前方（膝过伸）', '膝在踝后方'],
+      ['膝在踝上方微屈，不锁死',
+        '轻度锁膝：站立时有意识保持膝微屈，深蹲时不要“把膝顶死”',
+        '膝过伸明显：先重建股四头肌与腘绳肌平衡（靠墙静蹲 30 秒×3），建议就医排查膝关节问题']))
+    let score = 100;
+    items.forEach(it => { if (it.cls === 'b') score -= 9; else if (it.cls === 'c') score -= 20; });
+    score = Math.max(40, Math.round(score));
+    return { score, items, view: 'side', note: '侧面位为单视角矢状面近似评估（以关键点前后偏移归一），不代替医生诊断。' };
+  }
+
+  /* 合并正面 + 侧面：评分取两边均值（没有侧面就是原正面分），条目拼接供 UI 直接渲染 */
+  function mergePosture(front, side) {
+    const parts = [front, side].filter(Boolean);
+    if (!parts.length) return null;
+    const items = [];
+    parts.forEach(p => p.items.forEach(it => items.push(Object.assign({}, it, { view: p === front ? '正面' : '侧面' }))));
+    const score = Math.round(parts.reduce((a, p) => a + p.score, 0) / parts.length);
+    return { score, items, twoView: parts.length === 2, note: parts[parts.length - 1].note };
   }
 
   /* ================= 一句话编排（AI 计划）=================
@@ -795,7 +855,7 @@
 
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
-    ISSUES, EXERCISES, analyzePosture, planFromText, GAME_KINDS, makeGame,
+    ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, exRoundSec,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,

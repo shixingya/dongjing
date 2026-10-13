@@ -35,7 +35,7 @@
   <div class="hero">
     <div class="hero-txt">
       <h1>打开摄像头<br><span class="hl">AI 私教</span> 马上开工</h1>
-      <p>在家、在办公室，<b>只计标准有效次数</b>，动作错了当场喊你纠正。<br><b>10 个动作 · 33 关键点 · 19 条纠错规则 · 3 个体感关卡 · 7 天自动课表</b>，全部 AI 在浏览器本地运算，<b>画面不上传云端</b>。</p>
+      <p>在家、在办公室，<b>只计标准有效次数</b>，动作错了当场喊你纠正。<br><b>10 个动作 · 33 关键点 · 19 条纠错规则 · 3 个体感关卡 · 7 天自动课表 · 8 项体态评估</b>，全部 AI 在浏览器本地运算，<b>画面不上传云端</b>。</p>
       <div class="hero-btns">
         <button class="btn primary" data-ex="squat">▶ 开始今日训练</button>
         <button class="btn ghost" id="btn-circuit">🔁 循环训练</button>
@@ -188,11 +188,12 @@
 <section class="screen" id="screen-posture">
   <div class="posture-wrap">
     <div class="card posture-intro" id="pst-intro">
-      <h2>🧍 30 秒体态快评</h2>
-      <p>正面站立，全身入镜，AI 采样 6 秒评估 <b>头前倾 / 高低肩 / 骨盆前倾代偿</b>，给出拉伸建议。</p>
+      <h2>🧍 两步体态快评（正面 + 侧面）</h2>
+      <p>先正面 6 秒，再侧身 6 秒。AI 评估 <b>正面 4 项</b>（头颈侧移 / 高低肩 / 骨盆侧倾 / 躯干侧偏）+ <b>侧面 4 项</b>（头前倾 / 圆肩 / 骨盆前倾代偿 / 膝过伸），给出拉伸与训练建议。</p>
       <ul class="rule-list">
         <li>镜头约 2 米外，头顶到脚踝都在画面内</li>
         <li>自然站直、双手垂放、目视前方</li>
+        <li>第二步侧身：侧面朝镜头，双臂自然垂在体侧</li>
         <li>穿贴身衣物识别更准</li>
       </ul>
       <button class="btn primary" id="btn-pst-start">开始评估</button>
@@ -202,14 +203,31 @@
       <video id="pst-cam" autoplay playsinline muted></video>
       <canvas id="pst-skel"></canvas>
       <div class="hud">
-        <div class="hud-top"><button class="hud-btn" id="btn-pst-quit">✕ 退出</button><div class="hud-name">体态评估</div></div>
+        <div class="hud-top"><button class="hud-btn" id="btn-pst-quit">✕ 退出</button><div class="hud-name" id="pst-step">体态评估 · 第 1/2 步 正面</div></div>
         <div class="hud-center"><div class="rest-num" id="pst-count">6</div><div class="hud-phase" id="pst-txt">请自然站直，目视前方…</div></div>
+      </div>
+      <!-- 两步之间的转身分隔 -->
+      <div class="stage-mask" id="pst-turn" hidden>
+        <div class="mask-box">
+          <div class="mask-ico">🔄</div>
+          <h3>第二步 · 侧面</h3>
+          <p>请转身 90°，<b>侧身</b>朝向镜头，双臂自然垂在体侧，全身入镜。侧面才能看到头前倾 / 圆肩 / 骨盆前倾。</p>
+          <div class="result-btns">
+            <button class="btn primary" id="btn-pst-side">我侧好了，继续</button>
+            <button class="btn ghost" id="btn-pst-skip">跳过侧面（只出正面 4 项）</button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="card posture-result" id="pst-result" hidden>
       <h2>评估结果</h2>
       <div class="result-score"><b id="pst-score">0</b><span>体面评分</span></div>
       <div id="pst-items"></div>
+      <div class="pst-trend" id="pst-trend-box" hidden>
+        <b>体面评分趋势</b>
+        <canvas id="pst-trend" width="640" height="120"></canvas>
+        <span class="tiny muted" id="pst-trend-txt"></span>
+      </div>
       <div class="pst-advice card-inner" id="pst-advice"></div>
       <div class="result-btns">
         <button class="btn primary" id="btn-pst-again">重新评估</button>
@@ -231,6 +249,10 @@
       <h4>TOP 动作问题 <small>错误不计入次数</small></h4>
       <div id="top-issues" class="top-issues"></div>
     </div>
+  </div>
+  <div class="card rep-card">
+    <h4>体态评估记录 <small id="pst-hist-tip"></small></h4>
+    <div id="pst-hist" class="pst-hist"></div>
   </div>
   <div class="card rep-card">
     <h4>历史记录</h4>
@@ -344,7 +366,7 @@
   <div class="modal-box card">
     <button class="modal-x" data-close>✕</button>
     <h3>升级 <span class="gold-txt">动镜 Pro</span></h3>
-    <p class="muted">解锁全部动作 · 不限训练次数 · 体态趋势 · 报表详情</p>
+    <p class="muted">解锁全部动作 · 不限训练次数 · 手指级抓握识别 · 报表详情</p>
     <div class="price-row">
       <div class="price-opt"><b>¥29</b><span>/月</span></div>
       <div class="price-opt best"><em>最划算</em><b>¥168</b><span>/年 ≈ ¥14/月</span></div>

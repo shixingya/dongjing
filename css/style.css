@@ -162,6 +162,12 @@ h3{font-size:18px}
 .pst-item{display:flex; align-items:center; justify-content:space-between; padding:10px 4px; border-bottom:1px dashed var(--line); font-size:14px}
 .pst-item .lvl{font-weight:800}
 .lvl.a{color:var(--hl)} .lvl.b{color:var(--warn)} .lvl.c{color:var(--bad)}
+/* 两步评估：8 项混排时用小标签说明这一项来自哪个视角 */
+.pst-item .pv{display:inline-block; margin-right:7px; padding:1px 6px; border-radius:999px; font-size:11px; font-style:normal; font-weight:700; vertical-align:1.5px; color:var(--hl2); background:rgba(37,182,240,.12); border:1px solid rgba(37,182,240,.3)}
+.pst-trend{margin:16px 0 4px; text-align:left}
+.pst-trend>b{display:block; font-size:13px; color:var(--hl2); margin-bottom:6px}
+.pst-trend canvas{width:100%; height:auto; display:block}
+.pst-trend .tiny{display:block; margin-top:4px; font-size:11.5px}
 .card-inner{background:var(--bg2); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin:14px 0; font-size:13px; color:var(--muted); line-height:1.9; text-align:left}
 
 /* ---- 报告 ---- */
@@ -181,6 +187,8 @@ h3{font-size:18px}
 .hist-row.head{color:var(--txt); font-weight:700; border-bottom:1px solid var(--line)}
 .hist-row b{color:var(--hl)}
 .empty-tip{color:var(--muted); font-size:13px; text-align:center; padding:24px}
+.pst-hist .hist-row{grid-template-columns:92px 58px 116px 1fr}
+.pst-hist .tiny{display:block; margin-top:9px; font-size:11.5px}
 
 /* ---- 我的 ---- */
 .me-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px}

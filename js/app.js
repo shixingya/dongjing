@@ -1270,42 +1270,95 @@
   }
   function stopTipRotator() { if (tipTimer) { clearInterval(tipTimer); tipTimer = null; } }
 
-  /* ---------------- 体态评估 ---------------- */
-  const P = { on: false, samples: [], needLeft: 6, iv: null };
+  /* ---------------- 体态评估（两步：正面 + 侧面）----------------
+   * 正面看得到左右偏差，侧面才看得到矢状面（头前倾/圆肩/骨盆前倾/膝过伸）。
+   * 采完正面会请用户转身；不想配合也能“跳过侧面”，回到只出正面 4 项的老口径。 */
+  const P = { on: false, samples: [], needLeft: 6, iv: null, tick: 0, view: 'front', front: null };
+  const PST_N = 6;
+  function pstStepUI() {
+    $('#pst-step').textContent = '体态评估 · 第 ' + (P.view === 'front' ? '1/2' : '2/2') + ' 步 ' + (P.view === 'front' ? '正面' : '侧面');
+    $('#pst-count').textContent = P.needLeft;
+  }
   $('#btn-pst-start').onclick = async () => {
     if (P.on) return;
-    $('#pst-intro').hidden = true; $('#pst-result').hidden = true; $('#pst-stage').hidden = false;
+    $('#pst-intro').hidden = true; $('#pst-result').hidden = true; $('#pst-stage').hidden = false; $('#pst-turn').hidden = true;
     $('#pst-cam').classList.toggle('no-mirror', !DB.set.mirror);
     try { await ensureCam(); } catch (e) { toast('摄像头开启失败：' + e.message); return; }
     try { await ensureEngine(); } catch (e) { toast('模型加载失败，请检查网络'); return; }
-    P.on = true; P.samples = []; P.needLeft = 6;
+    Object.assign(P, { view: 'front', front: null, samples: [], needLeft: PST_N, tick: 0, on: true });
+    pstStepUI();
     startLoop($('#pst-cam'), $('#pst-skel'), onPostureFrame);
   };
   function onPostureFrame(lm, ts, dt) {
     if (!P.on) return;
-    const okKeys = X.visAll(lm, [0, 11, 12, 23, 24]) && (X.vis(lm, L.L_AN) || X.vis(lm, L.R_AN) || X.vis(lm, L.L_KNEE));
-    $('#pst-txt').textContent = okKeys ? '保持自然站直，目视前方…' : '请全身入镜（至少到膝盖），正面朝向镜头';
+    const side = P.view === 'side';
+    const legsOn = X.vis(lm, L.L_AN) || X.vis(lm, L.R_AN) || X.vis(lm, L.L_KNEE) || X.vis(lm, L.R_KNEE);
+    const okKeys = side
+      ? X.visAll(lm, [L.L_SHO, L.R_SHO]) && X.visAll(lm, [L.L_HIP, L.R_HIP]) &&
+        (X.vis(lm, L.NOSE) || X.vis(lm, L.L_EAR) || X.vis(lm, L.R_EAR)) && legsOn
+      : X.visAll(lm, [0, 11, 12, 23, 24]) && legsOn;
+    $('#pst-txt').textContent = okKeys
+      ? (side ? '侧身站好，双臂自然垂在体侧…' : '保持自然站直，目视前方…')
+      : (side ? '请侧身 90° 朝向镜头，头顶到脚踝都要在画面内' : '请全身入镜（至少到膝盖），正面朝向镜头');
     if (!okKeys) return;
-    if (!P.tick) P.tick = 0;
     P.tick += dt;
     if (P.tick >= 250) { P.tick = 0; P.samples.push(lm); P.needLeft--; $('#pst-count').textContent = Math.max(0, P.needLeft); sfx.tick(); }
-    if (P.needLeft <= 0) {
-      P.on = false; stopLoop();
-      const r = X.analyzePosture(P.samples);
-      $('#pst-stage').hidden = true; $('#pst-result').hidden = false;
-      if (!r) { toast('未捕捉到完整姿态，请重试'); $('#pst-intro').hidden = false; $('#pst-result').hidden = true; return; }
-      $('#pst-score').textContent = r.score;
-      $('#pst-items').innerHTML = r.items.map(it =>
-        '<div class="pst-item"><span>' + it.name + '</span><span class="lvl ' + it.cls + '">' + it.level + ' · ' + it.pct + '</span></div>').join('');
-      $('#pst-advice').innerHTML = r.items.map(it => '· ' + it.advice).join('<br>') + '<br><span class="tiny">' + r.note + '</span>';
-      DB.posture.unshift({ ts: Date.now(), score: r.score, items: r.items });
-      DB.posture = DB.posture.slice(0, 30); save();
-      speak('评估完成，体面评分 ' + r.score + ' 分', true);
-    }
+    if (P.needLeft > 0) return;
+    P.on = false; stopLoop();
+    if (!side) { P.front = P.samples; P.samples = []; $('#pst-turn').hidden = false; return; }   // 第一步完成 → 请转身
+    finishPosture(X.analyzePosture(P.front), X.analyzePostureSide(P.samples));
   }
-  $('#btn-pst-quit').onclick = () => { P.on = false; stopLoop(); endPosture(); $('#pst-stage').hidden = true; $('#pst-intro').hidden = false; };
+  $('#btn-pst-side').onclick = () => {
+    $('#pst-turn').hidden = true; $('#pst-intro').hidden = true; $('#pst-result').hidden = true; $('#pst-stage').hidden = false;
+    Object.assign(P, { view: 'side', samples: [], needLeft: PST_N, tick: 0, on: true });
+    pstStepUI(); startLoop($('#pst-cam'), $('#pst-skel'), onPostureFrame);
+  };
+  $('#btn-pst-skip').onclick = () => { $('#pst-turn').hidden = true; finishPosture(X.analyzePosture(P.front), null); };
+
+  function finishPosture(fr, sd) {
+    const r = X.mergePosture(fr, sd);
+    $('#pst-stage').hidden = true; $('#pst-turn').hidden = true; P.view = 'front'; P.front = null;
+    if (!r) { toast('没采到有效姿态：需从头到膝盖入镜，并站够 6 拍'); $('#pst-result').hidden = true; $('#pst-intro').hidden = false; return; }
+    $('#pst-result').hidden = false;
+    $('#pst-score').textContent = r.score;
+    $('#pst-items').innerHTML = r.items.map(it =>
+      '<div class="pst-item"><span>' + (r.twoView ? '<em class="pv">' + it.view + '</em>' : '') + it.name + '</span>' +
+      '<span class="lvl ' + it.cls + '">' + it.level + ' · ' + it.pct + '%' + (it.dir ? '（' + it.dir + '）' : '') + '</span></div>').join('');
+    const bad = r.items.filter(it => it.cls !== 'a');
+    $('#pst-advice').innerHTML = (bad.length ? bad.map(it => '· <b>' + it.name.split('（')[0] + '</b>：' + it.advice).join('<br>')
+      : '· 所有项目都在良好范围内，保持就行 👏') + '<br><span class="tiny">' + r.note + '</span>';
+    DB.posture.unshift({ ts: Date.now(), score: r.score, twoView: r.twoView, items: r.items });
+    DB.posture = DB.posture.slice(0, 30); save();
+    drawPostureTrend();
+    speak('评估完成，体面评分 ' + r.score + ' 分' + (r.twoView ? '，正面与侧面共 ' + r.items.length + ' 项' : ''), true);
+  }
+  /* 体面评分趋势：canvas 手绘折线，不引入任何图表库 */
+  function drawPostureTrend() {
+    const box = $('#pst-trend-box'), cv = $('#pst-trend');
+    const hist = DB.posture.slice(0, 12).reverse().map(p => p.score);
+    if (hist.length < 2) { box.hidden = true; return; }
+    box.hidden = false;
+    const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+    g.clearRect(0, 0, W, H);
+    const lo = Math.max(0, Math.min.apply(null, hist) - 8), hi = Math.min(100, Math.max.apply(null, hist) + 8), rg = Math.max(1, hi - lo);
+    const px = i => 24 + i * (W - 48) / (hist.length - 1);
+    const py = v => H - 20 - (v - lo) / rg * (H - 40);
+    g.strokeStyle = 'rgba(139,160,188,.32)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(18, H - 20); g.lineTo(W - 18, H - 20); g.stroke();
+    g.strokeStyle = '#39d98a'; g.lineWidth = 2.5; g.beginPath();
+    hist.forEach((v, i) => i ? g.lineTo(px(i), py(v)) : g.moveTo(px(i), py(v)));
+    g.stroke();
+    g.fillStyle = '#39d98a';
+    hist.forEach((v, i) => { g.beginPath(); g.arc(px(i), py(v), 3.5, 0, 7); g.fill(); });
+    g.fillStyle = '#8ba0bc'; g.font = '13px system-ui'; g.textAlign = 'center';
+    hist.forEach((v, i) => { if (i === 0 || i === hist.length - 1 || hist.length <= 6) g.fillText(String(v), px(i), py(v) - 10); });
+    const d = hist[hist.length - 1] - hist[0];
+    $('#pst-trend-txt').textContent = '近 ' + hist.length + ' 次：' + hist[0] + ' → ' + hist[hist.length - 1] +
+      '（' + (d > 0 ? '↑ 进步 ' + d : d < 0 ? '↓ 下降 ' + (-d) : '持平') + '）· 同一机位同一站姿的对比才有意义';
+  }
+  $('#btn-pst-quit').onclick = () => { P.on = false; stopLoop(); endPosture(); pstStepUI(); $('#pst-txt').textContent = '请自然站直，目视前方…'; $('#pst-turn').hidden = true; $('#pst-stage').hidden = true; $('#pst-result').hidden = true; $('#pst-intro').hidden = false; };
   $('#btn-pst-again').onclick = () => { $('#pst-result').hidden = true; $('#pst-intro').hidden = false; go('posture'); };
-  function endPosture() { P.on = false; P.samples = []; P.tick = 0; }
+  function endPosture() { Object.assign(P, { on: false, samples: [], front: null, tick: 0, view: 'front', needLeft: PST_N }); }
 
   /* ---------------- 本周课表（v1.6）----------------
    * 课表不是另一个“计划工具”：它直接读本机历史记录重算，点一下就能开练。
@@ -1438,6 +1491,18 @@
     $('#top-issues').innerHTML = top.length
       ? top.map(([k, n]) => '<div class="ti"><span>' + (X.ISSUES[k] ? X.ISSUES[k].msg : k) + '</span><b>×' + n + '</b></div>').join('')
       : '<div class="empty-tip">还没有动作问题记录，继续保持 ✦</div>';
+    $('#pst-hist-tip').textContent = DB.posture.length === 0 ? '还没有评估过' :
+      DB.posture.length === 1 ? '1 次记录 · 再做一次就能看到趋势' : '共 ' + DB.posture.length + ' 次 · 下面为最近 ' + Math.min(5, DB.posture.length) + ' 次';
+    $('#pst-hist').innerHTML = DB.posture.length
+      ? '<div class="hist-row head"><span>时间</span><span>体面评分</span><span>覆盖</span><span>最差一项</span></div>' +
+        DB.posture.slice(0, 5).map(p => {
+          const w = (p.items || []).filter(it => it.cls !== 'a').sort((a, b) => a.cls < b.cls ? 1 : -1)[0];
+          return '<div class="hist-row"><span>' + fmtDate(p.ts) + '</span><b>' + p.score + '</b><span>' +
+            (p.twoView ? '正面+侧面 8 项' : '仅正面 4 项') + '</span><span>' +
+            (w ? w.name.split('（')[0] + ' ' + w.level : '全部良好') + '</span></div>';
+        }).join('') + (DB.posture.length > 1
+          ? '<p class="tiny muted">趋势：' + DB.posture.slice(0, 6).reverse().map(p => p.score).join(' → ') + '（体态评分只在同一机位、同一站姿下可比）</p>' : '')
+      : '<div class="empty-tip">还没做过体态评估：首页「体态评估」两步各 6 秒</div>';
     $('#hist-list').innerHTML = DB.records.length
       ? '<div class="hist-row head"><span>时间</span><span>动作</span><span>有效</span><span>评分</span><span>千卡</span></div>' +
         DB.records.slice(0, 40).map(r =>
@@ -1459,7 +1524,7 @@
     $('#chk-mirror').checked = DB.set.mirror;
   }
   function openPro(reason) {
-    $('#modal-pro').querySelector('p.muted').textContent = (reason || '') + ' 解锁全部动作 · 不限次数 · 体态趋势 · 报表详情';
+    $('#modal-pro').querySelector('p.muted').textContent = (reason || '') + ' 解锁全部动作 · 不限次数 · 手指级抓握识别 · 报表详情';
     $('#modal-pro').hidden = false;
   }
   $$('[data-close]').forEach(b => b.onclick = () => { const m = b.closest('.modal'); if (m) m.hidden = true; });
@@ -1524,10 +1589,11 @@
 
   /* ---------------- 启动 ---------------- */
   renderHome(); renderMe(); refreshChip(); envCheck();
-  window.__dongjing = {          // 调试句柄：控制台可读 lastLm/训练/关卡/课表/环境状态做远程诊断
+  window.__dongjing = {          // 调试句柄：控制台可读 lastLm/训练/关卡/课表/体态/环境状态做远程诊断
     state, DB, T, get G() { return G; }, get raf() { return rafId; },
     openGame, openTrain, startCircuit, envCheck,
     weekPlan, renderPlan, selectPlan(i) { PLAN_SEL = i; renderPlan(); },
+    get P() { return P; }, pst(fr, sd) { finishPosture(fr, sd); },   // 体态两步：无摄像头时也能用合成帧验证结果页
     env: { IS_IOS, IS_ANDROID, IS_MOBILE, IN_WX, DETECT_GAP, get speechUnlocked() { return speechUnlocked; } }
   };
   document.addEventListener('keydown', e => {
