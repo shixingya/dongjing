@@ -1566,12 +1566,44 @@
     return { count, totalSecs: Math.round(totalSecs), avgSecs: Math.round(totalSecs / count), longest, shortest: Number.isFinite(shortest) ? shortest : 0, buckets, typicalKey };
   }
 
+  /* ================= 动作提升对比：新手期 vs 现在（v3.5）=================
+   * 与最佳榜互补：personalBests 看“峰值到哪”，这里看“从起步到现在进步了多少”。
+   * 只认 EXERCISES 真动作 id、有评分记录按 ts 升序后前半/后半对比均分；
+   * 不足 2 节有评分的动作不进榜（没得比）。 */
+  function improvementStats(records) {
+    const rs = Array.isArray(records) ? records : [];
+    const meta = {}; EXERCISES.forEach(e => { meta[e.id] = e; });
+    const byId = {};
+    rs.forEach(r => {
+      if (!r || !r.ex || !meta[r.ex]) return;
+      if (!Number.isFinite(r.ts) || !Number.isFinite(r.score) || r.score <= 0) return;
+      (byId[r.ex] || (byId[r.ex] = [])).push(r);
+    });
+    const items = [];
+    Object.keys(byId).forEach(id => {
+      const arr = byId[id].sort((a, b) => a.ts - b.ts);
+      const n = arr.length;
+      if (n < 2) return;                                    // 少于 2 节没得比
+      const half = Math.floor(n / 2);
+      const avg = a => Math.round(a.reduce((s, r) => s + r.score, 0) / a.length);
+      const firstAvg = avg(arr.slice(0, half));
+      const lastAvg = avg(arr.slice(n - half));
+      const delta = lastAvg - firstAvg;
+      items.push({ id, name: meta[id].name, ico: meta[id].ico, n, firstAvg, lastAvg, delta,
+        status: delta >= 5 ? 'up' : delta <= -5 ? 'down' : 'flat' });
+    });
+    items.sort((a, b) => b.delta - a.delta || b.n - a.n);    // 进步最大的排前面
+    return { items, count: items.length,
+      improved: items.filter(i => i.status === 'up').length,
+      declined: items.filter(i => i.status === 'down').length };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

@@ -137,6 +137,8 @@
 
 - ✅ **v3.4 已交付（报告页锚点导航：15 张卡一眼定位、一点直达）**：① 报告页累积到 15 张卡（本周/生涯/热力/成就/时段/最佳/星期/部位/纠错/构成/走势/节奏/时长/体态/历史），纯 UI 迭代不新增报表——顶部加横向可换行的 `#rep-nav` chips，点任一枚 `scrollIntoView({behavior:'smooth'})` 滚到对应卡；② `REPORT_NAV` 表驱动（15 项 `{t,label,selector}`），渲染层只按表画 chips，卡片类名（`.lt-card/.hm-card/…/.pst-card/.hist-card`）成为导航锚点契约，后续增删卡片只改这张表；③ **点击走既有事件委托**（`.rep-chip` 与 `[data-go]`/`[data-ex]` 同一 handler），target 不存在时静默不崩；④ 冒烟验证 15 枚 chips 全部解析到真实 DOM 节点、逐一点击 0 抛错 0 console error；自检脚本 id_refs=167、nav_selectors=15 全部命中。
 
+- ✅ **v3.5 已交付（动作提升对比：每个动作从新手期到现在进步了多少）**：① `improvementStats(records)` 纯函数—只认 EXERCISES 真动作 id 且有限 ts + 有限 `score>0` 的记录，按动作分组、组内按 ts 升序，前半 `half=floor(n/2)` 条与后半末 half 条各自取均分（奇数节中间项两段均不参与），`delta=lastAvg-firstAvg`，≥+5 进 up、≤-5 进 down、其余 flat；返回 `{items(按 delta 降序、平手按节数),count,improved,declined}`；② **与最佳榜互补**（personalBests 看峰值、本卡看进步幅度）、与表现走势正交（那个看全局质量轨迹、这个拆到每个动作）；单节有评分的动作不进榜（没得比）、game-/circuit/非法记录全排除不崩；③ 渲染“新手期→现在”行列表（名称 + `firstAvg → lastAvg` + 进/退/持平标签，up 绿/down 橙），hover 看两段具体均分与节数，副标题“共 N 个动作可对比 · X 项在进步”；导航 chips 同步增至 16 枚（新增「提升」）；④ 单测覆盖空/null 不崩、递升 4 节（53→85/+32/up，验证 Math.round(.5) 进位）、乱序奇数 5 节验证排序与 half 划分、单节/非法/非真动作全部排除、down/flat 两路与 delta 降序排序；浏览器冒烟注入“深蹲递升 50→93 + 平板递降 80→58”，DOM 两行 nums/标签/色类与 `DJX.improvementStats` 逐项零偏差、副标题“共 2 个动作可对比 · 1 项在进步”、chipCount=16、点「提升」chip 直达 .im-card、0 console error。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；

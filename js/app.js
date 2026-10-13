@@ -1566,7 +1566,7 @@
     { t: '成就', s: '.ach-card' }, { t: '时段', s: '.dp-card' }, { t: '最佳', s: '.pb-card' },
     { t: '星期', s: '.wd-card' }, { t: '部位', s: '.bc-card' }, { t: '纠错', s: '.it-card' },
     { t: '构成', s: '.ms-card' }, { t: '走势', s: '.st-card' }, { t: '节奏', s: '.tc-card' },
-    { t: '时长', s: '.sd-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
+    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
   ];
   function renderRepNav() {
     const nav = $('#rep-nav'); if (!nav) return;
@@ -1586,6 +1586,7 @@
     renderScoreTrend();
     renderCadence();
     renderDuration();
+    renderImprovement();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1843,6 +1844,23 @@
     }).join('');
     const typ = sd.buckets.find(b => b.key === sd.typicalKey);
     if (sum) sum.textContent = '平均每节 ' + fmtMin(sd.avgSecs) + ' · 常见「' + (typ ? typ.name : '') + '」· 最长 ' + fmtMin(sd.longest);
+  }
+
+  /* 提升对比：improvementStats 纯逻辑算每个动作前半/后半均分，这里只画“新手期→现在”行列表 */
+  function renderImprovement() {
+    const box = $('#im-rows'); if (!box) return;
+    const sum = $('#im-sum');
+    const im = X.improvementStats(DB.records);
+    if (!im.count) { box.innerHTML = '<div class="empty-tip">同一个动作练满 2 节有评分的记录，才能对比新手期和现在的进步</div>'; if (sum) sum.textContent = ''; return; }
+    const ST = { up: { t: '进步', c: 'good' }, down: { t: '退步', c: 'warn' }, flat: { t: '持平', c: '' } };
+    box.innerHTML = im.items.slice(0, 8).map(i => {
+      const s = ST[i.status], dt = (i.delta > 0 ? '+' : '') + i.delta;
+      return '<div class="im-row" title="' + i.name + ' · 共 ' + i.n + ' 节有评分 · 前半均分 ' + i.firstAvg + ' → 后半均分 ' + i.lastAvg + '">' +
+        '<span class="im-name">' + i.ico + ' ' + i.name + '</span>' +
+        '<span class="im-nums">' + i.firstAvg + ' → ' + i.lastAvg + '</span>' +
+        '<span class="im-delta ' + s.c + '">' + dt + ' ' + s.t + '</span></div>';
+    }).join('');
+    if (sum) sum.textContent = '共 ' + im.count + ' 个动作可对比 · ' + im.improved + ' 项在进步';
   }
 
   /* ---------------- 我的 / Pro ---------------- */

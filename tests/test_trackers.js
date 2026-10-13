@@ -1187,4 +1187,46 @@ function mkHand(tipDist) {
   console.log('[sd] 全部断言通过');
 }
 
+/* ================= v3.5 动作提升对比 improvementStats ================= */
+{
+  const fail = m => { console.log('[is] FAIL:', m); process.exit(1); };
+
+  /* 空 / null 不崩 */
+  const e = X.improvementStats([]);
+  if (e.count !== 0 || e.items.length !== 0 || e.improved !== 0) fail('空数据应 count0/improved0');
+  if (X.improvementStats(null).count !== 0) fail('null 应不崩');
+
+  /* 深蹲递升 50→55→80→90：前半均分 53（round(52.5)）、后半均分 85、delta 32 up */
+  const sq = [{ ex: 'squat', ts: 1, score: 50 }, { ex: 'squat', ts: 2, score: 55 }, { ex: 'squat', ts: 3, score: 80 }, { ex: 'squat', ts: 4, score: 90 }];
+  const r1 = X.improvementStats(sq);
+  if (r1.count !== 1) fail('深蹲应唯一进榜 实际 ' + r1.count);
+  const it = r1.items[0];
+  if (it.firstAvg !== 53 || it.lastAvg !== 85 || it.delta !== 32 || it.status !== 'up') fail('53→85/+32/up 实际 ' + it.firstAvg + '/' + it.lastAvg + '/' + it.delta + '/' + it.status);
+  if (r1.improved !== 1) fail('improved 应 1');
+
+  /* 乱序传入验证按 ts 排序；奇数节中间项两段均不参与（half=floor） */
+  const odd = [{ ex: 'plank', ts: 30, score: 70 }, { ex: 'plank', ts: 10, score: 50 }, { ex: 'plank', ts: 50, score: 80 }, { ex: 'plank', ts: 20, score: 60 }, { ex: 'plank', ts: 40, score: 75 }];
+  const o = X.improvementStats(odd).items[0];
+  if (o.n !== 5 || o.firstAvg !== 55 || o.lastAvg !== 78 || o.delta !== 23) fail('乱序奇数 5 节应 55→78/+23 实际 ' + o.firstAvg + '→' + o.lastAvg + '/' + o.delta);
+
+  /* 只有 1 节有评分的动作不进榜；非真动作 id/无 score/score<=0/非法 ts 全排除 */
+  const dirty = X.improvementStats([
+    { ex: 'squat', ts: 1, score: 60 },
+    { ex: 'game-collect', ts: 2, score: 80 }, { ex: 'game-collect', ts: 3, score: 90 },
+    { ex: 'jack', ts: 4 }, { ex: 'jack', ts: 5, score: 0 }, { ex: 'jack', ts: NaN, score: 70 },
+    { ex: 'jack', ts: 6, score: 40 }, { ts: 7, score: 50 }, null
+  ]);
+  if (dirty.count !== 0) fail('单节/非法/非真动作全部排除，不足 2 节不进榜 实际 count ' + dirty.count);
+
+  /* down 与 flat：递降 delta<=-5 判 down；持平判 flat；多项按 delta 降序排 */
+  const down = [{ ex: 'squat', ts: 1, score: 90 }, { ex: 'squat', ts: 2, score: 88 }, { ex: 'squat', ts: 3, score: 60 }, { ex: 'squat', ts: 4, score: 58 }];
+  const flat = [{ ex: 'jack', ts: 1, score: 70 }, { ex: 'jack', ts: 2, score: 71 }, { ex: 'jack', ts: 3, score: 70 }, { ex: 'jack', ts: 4, score: 72 }];
+  const multi = X.improvementStats(down.concat(flat));
+  if (multi.items[0].id !== 'jack' || multi.items[0].status !== 'flat') fail('持平应排前（delta 降序）且判 flat');
+  if (multi.items[1].status !== 'down' || multi.items[1].delta !== -30) fail('递降应 down/-30 实际 ' + multi.items[1].status + '/' + multi.items[1].delta);
+  if (multi.declined !== 1 || multi.improved !== 0) fail('declined1/improved0');
+
+  console.log('[is] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

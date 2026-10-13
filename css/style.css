@@ -477,6 +477,15 @@ h3{font-size:18px}
 .rep-chip{background:#141d2b; border:1px solid var(--line); color:var(--muted); font-size:12.5px; padding:5px 12px; border-radius:999px; cursor:pointer; white-space:nowrap; transition:.15s}
 .rep-chip:hover{color:var(--txt); border-color:var(--hl2)}
 .rep-chip:active{color:var(--hl); border-color:var(--hl)}
+/* ---- v3.5 动作提升对比 ---- */
+.im-rows{display:flex; flex-direction:column}
+.im-row{display:grid; grid-template-columns:1fr 92px 84px; align-items:center; gap:10px; padding:9px 4px; border-bottom:1px solid var(--line)}
+.im-row:last-child{border-bottom:none}
+.im-name{font-size:13.5px; color:var(--txt); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.im-nums{font-size:12.5px; color:var(--muted); text-align:center}
+.im-delta{font-size:12.5px; font-weight:700; text-align:right}
+.im-delta.good{color:var(--hl)}
+.im-delta.warn{color:#f0a35e}
 
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}
