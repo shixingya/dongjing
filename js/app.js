@@ -1570,6 +1570,7 @@
     renderMode();
     renderScoreTrend();
     renderCadence();
+    renderDuration();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1808,6 +1809,25 @@
     box.innerHTML = items.map(x => '<div class="tc-cell" title="' + x.tip + '"><b>' + x.v + '</b><span>' + x.k + '</span></div>').join('');
     const r = RHYTHM[tc.rhythm] || RHYTHM.new;
     if (sum) sum.innerHTML = '<span class="tc-badge ' + r.c + '">' + r.t + '</span> · 共 ' + tc.activeDays + ' 个训练日';
+  }
+
+  /* 时长画像：sessionDuration 纯逻辑算单次均长/最长/最短与时长分桶，这里只画四行分布条 */
+  function renderDuration() {
+    const box = $('#sd-rows'); if (!box) return;
+    const sum = $('#sd-sum');
+    const sd = X.sessionDuration(DB.records);
+    if (!sd.count) { box.innerHTML = '<div class="empty-tip">还没有记录到训练时长，练几节课这里会显示你的时长分布</div>'; if (sum) sum.textContent = ''; return; }
+    const fmtMin = s => { s = Math.round(s); if (s >= 3600) { const h = Math.floor(s / 3600), m = Math.round(s % 3600 / 60); return h + ' 时 ' + m + ' 分'; } return Math.max(1, Math.round(s / 60)) + ' 分钟'; };
+    const max = Math.max(1, ...sd.buckets.map(b => b.count));
+    box.innerHTML = sd.buckets.map(b => {
+      const pctw = Math.round(b.count / max * 100);
+      return '<div class="sd-row' + (b.key === sd.typicalKey ? ' best' : '') + '" title="' + b.name + ' · ' + b.count + ' 节 · 占 ' + b.pct + '%">' +
+        '<span class="sd-name">' + b.name + '</span>' +
+        '<span class="sd-bar"><i style="width:' + pctw + '%"></i></span>' +
+        '<span class="sd-num">' + (b.count || '—') + '</span></div>';
+    }).join('');
+    const typ = sd.buckets.find(b => b.key === sd.typicalKey);
+    if (sum) sum.textContent = '平均每节 ' + fmtMin(sd.avgSecs) + ' · 常见「' + (typ ? typ.name : '') + '」· 最长 ' + fmtMin(sd.longest);
   }
 
   /* ---------------- 我的 / Pro ---------------- */

@@ -1543,12 +1543,35 @@
     return { activeDays, gapCount: gaps.length, avgGap, longestGap, daysSinceLast, perWeek, rhythm, totalSpan };
   }
 
+  /* ================= 时长画像（v3.3）=================
+   * 只看存了有效时长（secs>0）的记录，统计单次训练的均长/最长/最短，并按四个时长
+   * 区间分桶，看典型一节课练多久。与生涯总览不同：那个给累计总时长，这个给单次时长的分布。 */
+  const DUR_BUCKETS = [
+    { key: 's', name: '3 分内', hi: 180 },
+    { key: 'm', name: '3–8 分', hi: 480 },
+    { key: 'l', name: '8–15 分', hi: 900 },
+    { key: 'x', name: '15 分以上', hi: Infinity }
+  ];
+  function classifyDur(sec) { for (let i = 0; i < DUR_BUCKETS.length; i++) { if (sec < DUR_BUCKETS[i].hi) return DUR_BUCKETS[i].key; } return 'x'; }
+  function sessionDuration(records) {
+    const rs = (Array.isArray(records) ? records : []).filter(r => r && Number.isFinite(r.ts) && Number.isFinite(r.secs) && r.secs > 0);
+    const count = rs.length;
+    if (!count) return { count: 0, totalSecs: 0, avgSecs: 0, longest: 0, shortest: 0, buckets: DUR_BUCKETS.map(b => ({ key: b.key, name: b.name, count: 0, pct: 0 })), typicalKey: null };
+    let totalSecs = 0, longest = 0, shortest = Infinity;
+    const acc = {}; DUR_BUCKETS.forEach(b => { acc[b.key] = 0; });
+    rs.forEach(r => { const s = r.secs; totalSecs += s; if (s > longest) longest = s; if (s < shortest) shortest = s; acc[classifyDur(s)]++; });
+    const buckets = DUR_BUCKETS.map(b => ({ key: b.key, name: b.name, count: acc[b.key], pct: Math.round(acc[b.key] / count * 100) }));
+    let typicalKey = null, tc = -1;
+    buckets.forEach(b => { if (b.count > tc) { tc = b.count; typicalKey = b.key; } });
+    return { count, totalSecs: Math.round(totalSecs), avgSecs: Math.round(totalSecs / count), longest, shortest: Number.isFinite(shortest) ? shortest : 0, buckets, typicalKey };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

@@ -1159,4 +1159,32 @@ function mkHand(tipDist) {
   console.log('[tc] 全部断言通过');
 }
 
+/* ================= v3.3 时长画像 sessionDuration ================= */
+{
+  const fail = m => { console.log('[sd] FAIL:', m); process.exit(1); };
+  if (X.DUR_BUCKETS.length !== 4) fail('时长分桶应 4 个');
+
+  /* 空 / null → count 0、4 桶全 0、typical null */
+  const e = X.sessionDuration([]);
+  if (e.count !== 0 || e.typicalKey !== null || e.buckets.length !== 4) fail('空数据应 count0/typical null/4 桶');
+  if (X.sessionDuration(null).count !== 0) fail('null 应不崩');
+
+  /* 混合时长：60/120→短、300→中、600→长、1000→超长；无 secs/secs<=0/非有限 ts 均排除 */
+  const recs = [{ ts: 1, secs: 60 }, { ts: 2, secs: 300 }, { ts: 3, secs: 600 }, { ts: 4, secs: 1000 }, { ts: 5, secs: 120 }, { ts: 6 }, { ts: 7, secs: 0 }, { ts: NaN, secs: 500 }];
+  const r = X.sessionDuration(recs);
+  if (r.count !== 5) fail('应只计 5 条有效时长 实际 ' + r.count);
+  if (r.totalSecs !== 2080 || r.avgSecs !== 416) fail('总 2080/均 416 实际 ' + r.totalSecs + '/' + r.avgSecs);
+  if (r.longest !== 1000 || r.shortest !== 60) fail('最长1000/最短60 实际 ' + r.longest + '/' + r.shortest);
+  const bk = {}; r.buckets.forEach(b => bk[b.key] = b);
+  if (bk.s.count !== 2 || bk.m.count !== 1 || bk.l.count !== 1 || bk.x.count !== 1) fail('分桶 2/1/1/1 实际 ' + r.buckets.map(b => b.count).join('/'));
+  if (bk.s.pct !== 40) fail('短桶占比应 40 实际 ' + bk.s.pct);
+  if (r.typicalKey !== 's') fail('典型桶应取节数最多的短桶 实际 ' + r.typicalKey);
+
+  /* 单一时长区间 */
+  const allShort = X.sessionDuration([{ ts: 1, secs: 30 }, { ts: 2, secs: 90 }]);
+  if (allShort.avgSecs !== 60 || allShort.typicalKey !== 's' || allShort.buckets[3].count !== 0) fail('全短时长 avg60/typical s/超长 0');
+
+  console.log('[sd] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

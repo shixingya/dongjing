@@ -133,6 +133,8 @@
 
 - ✅ **v3.2 已交付（训练节奏：你是高频规律还是随缘型）**：① `trainingCadence(records, {today})` 纯函数—把有合法 ts 的记录归一到自然日去重、升序，逐相邻活跃日算间隔天数，返回 `{activeDays,gapCount,avgGap,longestGap,daysSinceLast,perWeek,rhythm,totalSpan}`；② **节奏三档**：`avgGap<=2` → steady（高频规律）、`<=4` → regular（隔天一练）、否则 casual（随缘型）；perWeek=7/avgGap 折算每周训练天数；③ **today 驱动 daysSinceLast**（上一次训练离今天几天，同日多条去重不拆天），与热力图“最长连续”不同视角（本卡看节奏均匀度）；不足 2 个活跃日/非法 ts/null 不崩；④ 渲染四格指标宫格（平均间隔/每周频次/最长空档/距上次）+ 徽章式节奏定性（steady 绿/casual 橙），hover 看每项口径；⑤ 单测覆盖空/null/new、连续 6 天 steady/perWeek7/距 1 天、每 3 天 regular/天数命中今天、隔 10 天 casual/longest10、同日多条去重为 1 活跃日、非有限 ts 丢弃；浏览器冒烟注入“每 2 天一练共 7 个活跃日且今天练”，DOM 四格 2 天/3.5 次周/2 天/今天、徽章“高频规律”good、副标题“共 7 个训练日”与 `DJX.trainingCadence` 逐项零偏差、0 console error。
 
+- ✅ **v3.3 已交付（时长画像：你典型一节课练多久）**：① `sessionDuration(records)` 纯函数—只取有限 ts + 有限 secs 且 `secs>0` 的记录，累加 `{count,totalSecs,avgSecs,longest,shortest}`，并按 `DUR_BUCKETS` 四个区间（3 分内 / 3–8 分 / 8–15 分 / 15 分以上，边界 180/480/900 秒）分桶，逐桶 `{key,name,count,pct}`，typicalKey 取节数最多的一桶；② **与生涯总览互补**（lifetimeStats 给累计总时长、本函数给单次时长的分布），secs<=0/无 secs/非有限 ts/null 均排除不崩；③ 渲染四行横向条（宽=count/max）、典型桶加 best 高亮、右侧显节数，副标题“平均每节 X 分钟 · 常见「X」· 最长 X 分钟”（时长自动换算分钟/小时）；④ 单测覆盖空/null count0、混合时长（60/120→短、300→中、600→长、1000→超长，count5/total2080/avg416/longest1000/shortest60/分桶2-1-1-1/pct40/typical s）、无 secs/secs<=0/非有限 ts 排除、单一区间；浏览器冒烟注入 5 节（60/120/300/600/1000 秒），DOM 4 行 num=[2,1,1,1]、首行 best、副标题“平均每节 7 分钟 · 常见「3 分内」· 最长 17 分钟”与 `DJX.sessionDuration` 逐项零偏差、0 console error。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；
