@@ -21,12 +21,13 @@
 
   /* ---------------- 存储 ---------------- */
   const KEY = 'dongjing_v1';
-  const DEF = { records: [], posture: [], quota: { month: '', used: 0 }, set: { voice: true, sfx: true, mirror: true, weight: 60, dailyGoal: 30 }, pro: false };
+  const DEF = { records: [], posture: [], quota: { month: '', used: 0 }, set: { voice: true, sfx: true, mirror: true, weight: 60, dailyGoal: 30 }, pro: false, templates: [] };
   let DB = load();
   function load() {
     try {
       const o = Object.assign({}, DEF, JSON.parse(localStorage.getItem(KEY) || '{}'));
       o.set = Object.assign({}, DEF.set, o.set || {});   // 旧数据补齐新增设置项（dailyGoal 等）
+      if (!Array.isArray(o.templates)) o.templates = []; // v1.9 迁移：旧 DB 无 templates 字段
       return o;
     } catch (e) { return JSON.parse(JSON.stringify(DEF)); }
   }
@@ -669,6 +670,7 @@
       ? iss.map(([k, n]) => '<div class="ri"><span>' + (X.ISSUES[k] ? X.ISSUES[k].msg : k) + '</span><b>×' + n + '</b></div>').join('')
       : '<div class="ri"><span>本次没有明显动作问题 👏</span></div>';
     $('#btn-replay').hidden = T.clip.length < 8;          // 帧数太少不值得回放
+    $('#btn-save-tpl').hidden = true;                    // 单动作不值得存成课（模板至少 2 段）
     $('#res-review').hidden = true; $('#btn-review').hidden = true;
     renderReview(rec);
     checkGoal();
@@ -955,6 +957,7 @@
       '<div class="ri"><span>本局结束方式</span><b>' + (rec.over === 'hp' ? '血量耗尽' : '60 秒到') + '</b></div>' +
       (best != null ? '<div class="ri"><span>' + (rec.valid >= best ? '🎉 新的关卡最佳' : '历史最佳 ' + best + ' 分，差 ' + (best - rec.valid) + ' 分') + '</span></div>' : '');
     $('#btn-replay').hidden = true;
+    $('#btn-save-tpl').hidden = true;                    // 关卡不是可保存的“课”
     $('#res-review').hidden = true; $('#btn-review').hidden = true;
     renderReview(rec);
     checkGoal();
@@ -997,6 +1000,7 @@
 
   /* ---------------- 循环训练（circuit） ---------------- */
   const CIR_DEFAULT = ['squat', 'jack', 'highknees', 'headshake'];
+  let LAST_CIRCUIT_IDS = null;                 // v1.9：循环打完后的选片，供结果页“存为常用课”
   $('#btn-circuit').onclick = () => { renderCircuitPicker(); $('#modal-circuit').hidden = false; };
   function renderCircuitPicker(preset) {
     const sel = (preset && preset.length ? Array.from(new Set(preset)) : CIR_DEFAULT);
@@ -1095,6 +1099,8 @@
       (iss.length ? iss.map(([k, n]) => '<div class="ri"><span>' + (X.ISSUES[k] ? X.ISSUES[k].msg : k) + '</span><b>×' + n + '</b></div>').join('')
                   : '<div class="ri"><span>本轮没有明显动作问题 👏</span></div>');
     $('#btn-replay').hidden = true;                // 循环回放暂不展示（clip 仅末段）
+    LAST_CIRCUIT_IDS = T.seq.map(e => e.id);       // v1.9：记住这一轮的选片，供“存为常用课”
+    $('#btn-save-tpl').hidden = false;
     renderReview(LAST_REC);
     checkGoal();
     go('result'); sfx.finish();
@@ -1110,9 +1116,11 @@
     ['💪 上肢核心', '练上肢和核心 8 分钟']
   ];
   let PLAN = null;
+  const PLAN_SAVE_TXT = '💾 存为常用课';       // 空闲文案；存成功后变 “✓ 已存”，重算方案时复位
+  const PLAN_SAVED_TXT = '✓ 已存';
   $('#btn-plan').onclick = () => {
     $('#plan-presets').innerHTML = PLAN_PRESET.map(p => '<label class="cir-chip">' + p[0] + '</label>').join('');
-    PLAN = null; $('#plan-out').hidden = true; $('#btn-plan-start').hidden = true; $('#btn-plan-edit').hidden = true;
+    PLAN = null; $('#plan-out').hidden = true; $('#btn-plan-start').hidden = true; $('#btn-plan-edit').hidden = true; $('#btn-plan-save').hidden = true; $('#btn-plan-save').textContent = PLAN_SAVE_TXT;
     $('#plan-text').value = '';
     $('#modal-plan').hidden = false;
     setTimeout(() => { try { $('#plan-text').focus(); } catch (e) {} }, 60);
@@ -1130,7 +1138,7 @@
   };
   function makePlan() {
     const txt = $('#plan-text').value.trim();
-    if (!txt) { $('#plan-out').hidden = true; $('#btn-plan-start').hidden = true; $('#btn-plan-edit').hidden = true; PLAN = null; return; }
+    if (!txt) { $('#plan-out').hidden = true; $('#btn-plan-start').hidden = true; $('#btn-plan-edit').hidden = true; $('#btn-plan-save').hidden = true; PLAN = null; return; }
     PLAN = X.planFromText(txt, { pro: DB.pro });
     $('#plan-names').innerHTML = PLAN.ids.map((id, i) => {
       const e = X.EXERCISES.find(x => x.id === id);
@@ -1144,6 +1152,8 @@
     $('#plan-out').hidden = false;
     $('#btn-plan-start').hidden = false;
     $('#btn-plan-edit').hidden = false;
+    $('#btn-plan-save').hidden = false;
+    $('#btn-plan-save').textContent = PLAN_SAVE_TXT;   // 重新生成就复位文案，不能残留上一份的“✓ 已存”
   }
   $('#btn-plan-start').onclick = () => {
     if (!PLAN) return;
@@ -1154,6 +1164,65 @@
     $('#modal-plan').hidden = true;
     renderCircuitPicker(PLAN ? PLAN.ids : null);
     $('#modal-circuit').hidden = false;
+  };
+
+  /* ---------------- v1.9 我的课程（训练模板） ----------------
+   * 把一次循环跟练的选片、或一句话编排的结果存成常用课，下次首页一键复练。
+   * 纯数据逻辑全在 DJX（templateOf/tplAdd/tplSafe/tplEstimate），这里只做存取与渲染。 */
+  function saveAsTemplate(ids, name) {
+    const tpl = X.templateOf(ids, name);
+    if (!tpl) { toast('至少选 2 个动作才能存成课'); return false; }
+    const r = X.tplAdd(DB.templates, tpl);
+    DB.templates = r.list; save();
+    if (!r.ok) {
+      toast(r.why === 'dup' ? '这门课已经存过啦' : r.why === 'full' ? '最多只能存 ' + X.TPL_MAX + ' 门课' : '这门课存不了');
+      return false;
+    }
+    toast('已存为常用课 ✓');
+    return true;
+  }
+  $('#btn-save-tpl').onclick = () => { if (LAST_CIRCUIT_IDS) { if (saveAsTemplate(LAST_CIRCUIT_IDS, null)) renderTemplates(); } };
+  $('#btn-plan-save').onclick = () => {
+    if (!PLAN) return;
+    if (saveAsTemplate(PLAN.ids, null)) { renderTemplates(); $('#btn-plan-save').textContent = PLAN_SAVED_TXT; }
+  };
+
+  function renderTemplates() {
+    const box = $('#tpl-section'), list = $('#tpl-list');
+    if (!box || !list) return;
+    const tpls = X.tplSafe(DB.templates);
+    DB.templates = tpls;                       // 顺手把 localStorage 里的脏项清掉再落盘
+    if (!tpls.length) { box.hidden = true; list.innerHTML = ''; save(); return; }
+    box.hidden = false;
+    $('#tpl-sum').textContent = tpls.length + ' / ' + X.TPL_MAX;
+    list.innerHTML = tpls.map(t => {
+      const est = X.tplEstimate(t);
+      const badges = [];
+      if (est.seatedOnly) badges.push('<span class="tb seat">全程坐姿</span>');
+      if (est.locked.length) badges.push('<span class="tb pro">含 Pro·' + est.locked[0] + (est.locked.length > 1 ? ' 等 ' + est.locked.length + ' 个' : '') + '</span>');
+      return '<div class="tpl-item" data-tpl="' + t.id + '">' +
+        '<div class="tn"><span class="tname">' + t.name + '</span><button class="tpl-del" title="删除这门课">✕</button></div>' +
+        '<div class="tmeta">' + est.segs + ' 段 · 约 ' + est.estMin + ' 分钟</div>' +
+        '<div class="tnames">' + est.names.join(' → ') + '</div>' +
+        (badges.length ? '<div class="tbadges">' + badges.join('') + '</div>' : '') +
+        '<div class="tbtns"><button class="btn primary btn-tpl-run">▶ 开练</button></div>' +
+        '</div>';
+    }).join('');
+  }
+  $('#tpl-list').onclick = e => {
+    const item = e.target.closest('.tpl-item'); if (!item) return;
+    const id = item.getAttribute('data-tpl');
+    if (e.target.closest('.tpl-del')) {
+      DB.templates = X.tplRemove(DB.templates, id); save(); renderTemplates(); toast('已删除');
+      return;
+    }
+    if (e.target.closest('.btn-tpl-run')) {
+      const t = X.tplSafe(DB.templates).find(x => x.id === id);
+      if (!t) return;
+      const lockedIds = t.ids.filter(i2 => { const ex = findEx(i2); return ex && !ex.free; });
+      if (!DB.pro && lockedIds.length) { openPro('这门课含 Pro 动作（' + lockedIds.map(i2 => findEx(i2).name).join(' / ') + '），升级后即可开练'); return; }
+      startCircuit(t.ids.slice());
+    }
   };
 
   /* ---------------- 组回放（火柴人序列，非视频） ---------------- */
@@ -1452,6 +1521,7 @@
     const cn = $('#coach-card'); if (cn) cn.innerHTML = '<b>🧠 教练笔记</b><span>' + coachNoteHTML() + '</span>';
     renderPlan();
     renderGoal();
+    renderTemplates();
     refreshChip();
   }
 

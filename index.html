@@ -68,6 +68,12 @@
     <div class="plan-act"><button class="btn primary" id="btn-plan-go">照课表开练</button></div>
   </div>
 
+  <!-- v1.9 我的课程（训练模板） -->
+  <div class="card tpl-section" id="tpl-section" hidden>
+    <div class="tpl-head"><b>📋 我的课程</b><span class="tiny muted" id="tpl-sum"></span></div>
+    <div class="tpl-list" id="tpl-list"></div>
+  </div>
+
   <h2 class="sec-title">动作库 <small>错误动作不计入次数</small></h2>
   <div class="ex-grid" id="ex-grid"><!-- JS 渲染动作卡片 --></div>
 
@@ -177,6 +183,7 @@
     <div class="result-btns">
       <button class="btn primary" data-go="home">回首页</button>
       <button class="btn ghost" id="btn-again">再来一组</button>
+      <button class="btn ghost" id="btn-save-tpl" hidden>💾 存为常用课</button>
       <button class="btn ghost" id="btn-replay" hidden>▶ 回放本组</button>
       <button class="btn ghost" id="btn-review" hidden>🎙 复盘讲解</button>
       <button class="btn ghost" id="btn-share">🖼 分享成绩</button>
@@ -316,6 +323,7 @@
     <div class="replay-ctrls">
       <button class="btn primary" id="btn-plan-start" hidden>▶ 就按这个开练</button>
       <button class="btn ghost" id="btn-plan-edit" hidden>自己改</button>
+      <button class="btn ghost" id="btn-plan-save" hidden>💾 存为常用课</button>
     </div>
   </div>
 </div>

@@ -1004,10 +1004,66 @@
     };
   }
 
+  /* ================= 我的课程（训练模板，v1.9）=================
+   * 把一次循环跟练的选片或一句话编排存成常用课。这里只做纯数据逻辑：校验、去重、
+   * 命名、时长估都能在 Node 里测；存储与渲染交给 app.js。 */
+  const TPL_MAX = 12;          // 首页卡片放不下更多：满了就明确拒绝，而不是静默丢弃或无限堆
+  const TPL_NAME_MAX = 20;
+  const findEx = id => EXERCISES.find(e => e.id === id);
+
+  /* 名字可以不给（默认用动作名拼），但存进去的东西得能看能改：去控制字符、限长 */
+  function tplName(raw, ids) {
+    const fallback = (ids || []).map(id => (findEx(id) || { name: id }).name).join('+');
+    const s = String(raw == null ? '' : raw).replace(/[\r\n\t]/g, ' ').trim();
+    return (s || fallback).replace(/[<>"']/g, '').trim().slice(0, TPL_NAME_MAX);
+  }
+
+  function templateOf(ids, name, ts) {
+    const clean = [];
+    (Array.isArray(ids) ? ids : []).forEach(id => { if (findEx(id) && !clean.includes(id)) clean.push(id); });
+    if (clean.length < 2) return null;      // 循环跟练至少 2 个动作：单个直接练就好，不值得占一张卡
+    const nm = tplName(name, clean);
+    if (!nm) return null;
+    return { id: 't' + (Number(ts) || Date.now()).toString(36), name: nm, ids: clean };
+  }
+
+  /* 存课：查重、限长都在此返回明确原因，让 UI 能说清“为什么没存进去” */
+  function tplAdd(list, tpl) {
+    const arr = tplSafe(list);
+    if (!tpl || !Array.isArray(tpl.ids) || tpl.ids.length < 2 || !tplName(tpl.name)) return { ok: false, why: 'bad', list: arr };
+    const key = a => a.slice().sort().join(',');    // 动作顺序不同也算同一门课：用户很容易存出一堆微差别重复项
+    const dup = arr.find(t => key(t.ids) === key(tpl.ids));
+    if (dup) return { ok: false, why: 'dup', list: arr, tpl: dup };
+    if (arr.length >= TPL_MAX) return { ok: false, why: 'full', list: arr };
+    return { ok: true, list: [tpl].concat(arr), tpl };
+  }
+  function tplRemove(list, id) { return tplSafe(list).filter(t => t.id !== id); }
+
+  /* 从 localStorage 读回来的数据可能缺字段或被手改过：只认结构合法的，不把脏项渲染出去 */
+  function tplSafe(list) {
+    return (Array.isArray(list) ? list : [])
+      .filter(t => t && typeof t.id === 'string' && typeof t.name === 'string' && t.name.trim()
+        && Array.isArray(t.ids) && t.ids.length >= 2 && t.ids.every(id => !!findEx(id)))
+      .slice(0, TPL_MAX)
+      .map(t => ({ id: t.id, name: t.name.trim().slice(0, TPL_NAME_MAX), ids: t.ids.slice() }));
+  }
+
+  /* 时长与名单：与周课表共用 exRoundSec 口径，不能两套算法估出两个分钟数 */
+  function tplEstimate(t) {
+    const ids = (t && Array.isArray(t.ids)) ? t.ids.filter(id => !!findEx(id)) : [];
+    const estSec = ids.reduce((a, id) => a + exRoundSec(findEx(id)) + 10, 0);
+    return {
+      segs: ids.length, names: ids.map(id => findEx(id).name),
+      estMin: +(estSec / 60).toFixed(1),
+      locked: ids.map(findEx).filter(e => !e.free).map(e => e.name),
+      seatedOnly: ids.length > 0 && ids.every(id => !!findEx(id).seated)   // 全坐姿 = 办公室可直接开练
+    };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
-    makeWeekPlan, WEEK_PLAN, exRoundSec,
+    makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

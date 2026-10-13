@@ -536,4 +536,84 @@ function mkHand(tipDist) {
   if (!X.HAND_CONNS || X.HAND_CONNS.length < 20) { console.log('HAND_CONNS 缺失'); process.exit(1); }
 }
 
+/* --- v1.9 训练模板：templateOf / tplAdd / tplSafe / tplEstimate --- */
+{
+  /* templateOf：合法 ids（去重、过滤无效 id） */
+  const t1 = X.templateOf(['squat', 'squat', 'jack', 'bogus'], null, 1000);
+  console.log('[tpl-templateOf 去重] ids =', t1 && t1.ids.join(','), 'name =', t1 && t1.name);
+  if (!t1 || t1.ids.join(',') !== 'squat,jack') process.exit(1);
+  if (t1.name !== '深蹲+开合跳') { console.log('fallback 名异常', t1.name); process.exit(1); }
+
+  /* 少于 2 个有效 id → null */
+  if (X.templateOf(['squat'], 'x') !== null) { console.log('单动作应为 null'); process.exit(1); }
+  if (X.templateOf(null) !== null) process.exit(1);
+
+  /* HTML 标签字符过滤 + 截断 */
+  const t2 = X.templateOf(['headshake', 'wave'], '<script>alert("x")</script>这是超长的课程名字测试截断功能');
+  console.log('[tpl-templateOf 过滤] name =', t2.name);
+  if (/</.test(t2.name) || t2.name.length > X.TPL_MAX * 0 + 20) { console.log('名字应无 HTML 且 <=20'); process.exit(1); }
+
+  /* tplAdd 正常 */
+  const add1 = X.tplAdd([], t1);
+  console.log('[tpl-add] ok =', add1.ok, 'len =', add1.list.length);
+  if (!add1.ok || add1.list.length !== 1) process.exit(1);
+
+  /* dup 检测（不同顺序也算重复） */
+  const dupT = X.templateOf(['jack', 'squat'], '换位重复');
+  const add2 = X.tplAdd(add1.list, dupT);
+  console.log('[tpl-dup] why =', add2.why);
+  if (add2.ok || add2.why !== 'dup') process.exit(1);
+
+  /* bad：ids 不足 / name 空 */
+  const addBad = X.tplAdd([], { id: 'bx', name: '', ids: ['squat'] });
+  if (addBad.ok || addBad.why !== 'bad') { console.log('bad tpl 应拒绝'); process.exit(1); }
+
+  /* full：塞到上限 */
+  let full = [];
+  const pairs = [['squat', 'jack'], ['squat', 'lunge'], ['jack', 'lunge'], ['headshake', 'wave'],
+    ['headshake', 'shrug'], ['wave', 'shrug'], ['squat', 'highknees'], ['jack', 'highknees'],
+    ['lunge', 'highknees'], ['headshake', 'grasp'], ['wave', 'grasp'], ['shrug', 'grasp']];
+  pairs.forEach((ids, i) => { const t = X.templateOf(ids, '课' + i, 2000 + i); full.push(t); });
+  const overflow = X.tplAdd(full, X.templateOf(['squat', 'plank'], '溢出'));
+  console.log('[tpl-full] why =', overflow.why, '已有 =', overflow.list.length);
+  if (overflow.why !== 'full') process.exit(1);
+
+  /* tplRemove */
+  const removed = X.tplRemove(full, full[3].id);
+  if (removed.length !== full.length - 1 || removed.some(t => t.id === full[3].id)) { console.log('remove 异常'); process.exit(1); }
+  console.log('[tpl-remove] 剩余 =', removed.length);
+
+  /* tplSafe：脏数据过滤 */
+  const dirty = [
+    { id: 'ok1', name: 'Good', ids: ['squat', 'jack'] },
+    null,
+    { id: 'x', name: '', ids: ['squat', 'jack'] },          // 空 name
+    { id: 'y', name: 'Y', ids: ['squat'] },                  // 只 1 个
+    { id: 'z', name: 'Z', ids: ['nope', 'jack'] },          // 无效 id
+    { id: 'w', name: 'W', ids: 'not array' },
+  ];
+  const safe = X.tplSafe(dirty);
+  console.log('[tpl-safe] 合法保留 =', safe.length, safe.map(t => t.id));
+  if (safe.length !== 1 || safe[0].id !== 'ok1') process.exit(1);
+
+  /* tplEstimate */
+  const est = X.tplEstimate(t1);   // squat + jack
+  console.log('[tpl-est] segs =', est.segs, 'estMin =', est.estMin, 'names =', est.names.join(','));
+  if (est.segs !== 2 || !(est.estMin > 0) || /NaN|undefined/.test(JSON.stringify(est))) process.exit(1);
+  if (!est.names.includes('深蹲') || !est.names.includes('开合跳')) process.exit(1);
+  /* 含 Pro 动作 */
+  const estPro = X.tplEstimate({ ids: ['plank', 'squat'] });
+  console.log('[tpl-est Pro] locked =', estPro.locked.join(','));
+  if (!estPro.locked.includes('平板支撑')) process.exit(1);
+  /* 全坐姿 */
+  const estSeated = X.tplEstimate({ ids: ['headshake', 'wave', 'shrug'] });
+  console.log('[tpl-est 坐姿] seatedOnly =', estSeated.seatedOnly);
+  if (estSeated.seatedOnly !== true) process.exit(1);
+  /* 非全坐姿 */
+  const estMixed = X.tplEstimate({ ids: ['headshake', 'squat'] });
+  if (estMixed.seatedOnly !== false) { console.log('squat 不是 seated'); process.exit(1); }
+
+  console.log('[tpl] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

@@ -282,6 +282,26 @@ h3{font-size:18px}
 .plan-why{margin-top:6px; color:var(--muted); font-size:12.5px; line-height:1.7}
 .plan-why .pw.lock{color:var(--warn)}
 
+/* ---- v1.9 我的课程（训练模板） ---- */
+.tpl-section{margin:4px 0 18px; padding:14px 16px; border-left:3px solid var(--hl)}
+.tpl-head{display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; margin-bottom:10px}
+.tpl-head b{color:var(--hl); font-size:13.5px}
+.tpl-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px}
+.tpl-item{display:flex; flex-direction:column; gap:7px; padding:12px 13px; border-radius:12px; border:1px solid var(--line); background:var(--bg2)}
+.tpl-item .tn{font-size:14.5px; font-weight:600; display:flex; align-items:center; gap:6px}
+.tpl-item .tn .tname{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.tpl-item .tmeta{font-size:12px; color:var(--muted); line-height:1.6}
+.tpl-item .tnames{font-size:11.5px; color:var(--muted); line-height:1.6}
+.tpl-item .tbadges{display:flex; gap:6px; flex-wrap:wrap}
+.tpl-item .tb{font-size:10.5px; padding:2px 7px; border-radius:6px; background:#12203a; border:1px solid #2a3c58; color:var(--hl2)}
+.tpl-item .tb.pro{color:var(--warn); border-color:#5a4a22; background:#241d10}
+.tpl-item .tb.seat{color:var(--hl); border-color:#2b5c46; background:#12291f}
+.tpl-item .tbtns{display:flex; gap:8px; margin-top:2px}
+.tpl-item .tbtns .btn{flex:1; margin:0}
+.tpl-del{background:none; border:0; color:var(--muted); cursor:pointer; font-size:15px; line-height:1; padding:2px 4px; border-radius:6px}
+.tpl-del:hover{color:var(--bad); background:rgba(255,90,90,.12)}
+.tpl-empty{font-size:13px; color:var(--muted); line-height:1.7}
+
 /* ---- 环境预检横幅（微信内 / file:// / 无 getUserMedia 时才出现） ---- */
 .env-warn{padding:9px 18px; background:rgba(255,179,71,.12); border-bottom:1px solid rgba(255,179,71,.38);
   color:var(--warn); font-size:13px; line-height:1.65}
