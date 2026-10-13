@@ -250,6 +250,16 @@ h3{font-size:18px}
 .plan-why{margin-top:6px; color:var(--muted); font-size:12.5px; line-height:1.7}
 .plan-why .pw.lock{color:var(--warn)}
 
+/* ---- 体感关卡 ---- */
+.game-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin:14px 0 4px}
+.game-card{padding:14px; border:1px solid var(--line); border-radius:12px; cursor:pointer; transition:.16s; background:rgba(255,255,255,.02)}
+.game-card:hover{border-color:var(--hl)}
+.game-card.on{border-color:var(--hl); background:#12291f; box-shadow:0 0 0 1px var(--hl) inset}
+.game-card .ico{font-size:26px}
+.game-card h4{margin:6px 0 4px; font-size:15px}
+.game-card .desc{font-size:12px; color:var(--muted); line-height:1.6; min-height:34px}
+.game-card .meta{display:flex; gap:8px; margin-top:8px; font-size:11px; color:var(--hl2)}
+
 /* ---- 响应式 ---- */
 @media (max-width:900px){
   .hero{grid-template-columns:1fr}

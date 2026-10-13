@@ -33,11 +33,12 @@
   <div class="hero">
     <div class="hero-txt">
       <h1>打开摄像头<br><span class="hl">AI 私教</span> 马上开工</h1>
-      <p>在家、在办公室，<b>只计标准有效次数</b>，动作错了当场喊你纠正。<br><b>10 个动作 · 33 关键点 · 19 条纠错规则</b>，全部 AI 在浏览器本地运算，<b>画面不上传云端</b>。</p>
+      <p>在家、在办公室，<b>只计标准有效次数</b>，动作错了当场喊你纠正。<br><b>10 个动作 · 33 关键点 · 19 条纠错规则 · 3 个体感关卡</b>，全部 AI 在浏览器本地运算，<b>画面不上传云端</b>。</p>
       <div class="hero-btns">
         <button class="btn primary" data-ex="squat">▶ 开始今日训练</button>
         <button class="btn ghost" id="btn-circuit">🔁 循环训练</button>
         <button class="btn ghost" id="btn-plan">✨ AI 编排</button>
+        <button class="btn ghost" id="btn-game">🎮 体感关卡</button>
         <button class="btn ghost" data-go="posture">🧍 体态评估</button>
       </div>
     </div>
@@ -155,8 +156,8 @@
     <h2 id="res-title">训练完成！</h2>
     <div class="result-score"><b id="res-score">0</b><span>动作评分</span></div>
     <div class="result-grid">
-      <div><b id="res-reps">0</b><span>有效次数</span></div>
-      <div><b id="res-bad">0</b><span>无效次数</span></div>
+      <div><b id="res-reps">0</b><span id="lab-reps">有效次数</span></div>
+      <div><b id="res-bad">0</b><span id="lab-bad">无效次数</span></div>
       <div><b id="res-dur">0s</b><span>训练时长</span></div>
       <div><b id="res-cal">0</b><span>千卡(约)</span></div>
     </div>
@@ -310,6 +311,20 @@
     <div class="replay-ctrls">
       <button class="btn primary" id="btn-save-img">💾 保存图片</button>
       <button class="btn ghost" id="btn-copy-img">📋 复制图片</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 体感关卡弹窗 ====== -->
+<div class="modal" id="modal-game" hidden>
+  <div class="modal-box card wide">
+    <button class="modal-x" data-close>✕</button>
+    <h3>🎮 体感关卡 <small class="tiny muted">60 秒一局 · 不占用免费训练额度</small></h3>
+    <p class="muted">用同一套姿态识别玩：身体左右移动就是跨步，举手就是挥臂，蹲下就是护盾。玩的过程动作幅度比数数大得多。</p>
+    <div class="game-grid" id="game-kinds"><!-- JS 渲染关卡卡片 --></div>
+    <div class="replay-ctrls">
+      <button class="btn ghost" data-close>关闭</button>
+      <button class="btn primary" id="btn-game-start">开始关卡</button>
     </div>
   </div>
 </div>

@@ -97,6 +97,7 @@
     }
   }
   function stopTrainIfNeeded() {
+    if (T.phase === 'game') { endTrain('discard'); return; }   // 关卡中途离开：半局成绩没意义
     const active = T.phase === 'live' || T.phase === 'rest' || T.phase === 'calib';
     if (!active) { endTrain('discard'); return; }
     if (T.validTot > 0 || T.attempts > 0 || T.timeSec > 3) endTrain('save');   // 导航离开：静默存成绩
@@ -417,6 +418,7 @@
     const s = $('#hud-person'); s.textContent = txt; s.className = 'hud-status' + (ok ? ' ok' : '');
   }
   function setHud() {
+    if (T.ex.mode === 'game') { gameHud(); return; }
     $('#hud-rep').textContent = T.ex.mode === 'time' ? Math.floor(T.timeSec) : T.validSet;
     $('#hud-target').textContent = T.ex.mode === 'time' ? 's /' + T.ex.target + 's' : '/' + T.ex.target;
     const cum = T.seq ? (T.circuitStats || []).reduce((a, r) => a + r.valid, 0) + T.validTot : T.validTot;
@@ -447,6 +449,17 @@
       return;
     }
     if (T.phase === 'rest') return;
+    if (T.phase === 'game') {                       // 关卡：只要求躯干与腿在画面内（手臂甩出画面很常见，不能因此卡住）
+      if (!G) return;
+      if (!lm || !X.visAll(lm, [11, 12, 23, 24, 25, 26])) {
+        setStatus('往后退半步：上半身和膝盖都要在画面里', false);
+        drawGame($('#skel'), state.lastLm || lm);   // 保持画面物体继续显示，不因瞬时丢跟踪而闪烁
+        return;
+      }
+      setStatus('已识别 · ' + X.GAME_KINDS[G.S.kind].name, true);
+      gameFrame(lm, dt);
+      return;
+    }
     if (!lm || !X.visAll(lm, ex.keys)) {
       setStatus(ex.seated ? '请正对镜头，上半身入镜' : '退后一步，全身入镜', false);
       return;
@@ -460,7 +473,15 @@
       if (ok) {
         T.poseOkMs += dt;
         if (T.poseOkMs > 900) {
-          T.phase = 'live'; $('#mask-calib').hidden = true; $('#hud').hidden = false;
+          $('#mask-calib').hidden = true; $('#hud').hidden = false;
+          if (ex.game) {                             // 关卡不扣额度，直接开局
+            T.phase = 'game';
+            $('#hud-name').textContent = X.GAME_KINDS[ex.game].ico + ' ' + ex.name;
+            gameHud(); sfx.finish();
+            speak(X.GAME_KINDS[ex.game].name + '开始！' + ex.tips[0], true);
+            return;
+          }
+          T.phase = 'live';
           if (!DB.pro && (!T.seq || T.seqIdx === 0)) { DB.quota = { month: monthKey(), used: quotaUsed() + 1 }; save(); refreshChip(); }   // 循环整轮只扣 1 次额度
           feedback('开始！目标 ' + (ex.mode === 'time' ? ex.target + ' 秒' : ex.target + ' 次'), 'good', 'start', true);
           briefCoach(ex.id);                                    // 教练记忆：基于历史记录提醒老毛病
@@ -525,6 +546,7 @@
     }
   }
   function calibHint(ex) {
+    if (ex.game) return '站在画面正中间，全身入镜';
     return { squat: '自然站直', jack: '双脚并拢、双手垂放', highknees: '原地站直', pushup: '撑起手臂、身体一条直线', lunge: '自然站直', plank: '俯身撑好',
       headshake: '坐在椅上身直目视镜头', wave: '双手垂放准备举起', shrug: '双肩放松下垂', grasp: '举起双手、张开五指' }[ex.id] || '站直';
   }
@@ -556,8 +578,9 @@
 
   function endTrain(mode) {   // 'discard' | 'save' | 'saveShow'
     stopLoop(); stopTipRotator();
-    T.phase = 'off';
-    $('#hud').hidden = true; $('#mask-calib').hidden = true; $('#mask-rest').hidden = true;
+    if (T.phase === 'game') mode = 'discard';      // 关卡中途退出不记部分成绩
+    T.phase = 'off'; G = null;
+    $('#hud').hidden = true; $('#mask-calib').hidden = true; $('#mask-rest').hidden = true; $('#mask-setup').hidden = true;
     if (mode === 'save' || mode === 'saveShow') {
       const rec = saveResult();
       if (mode === 'saveShow') showResult(rec);
@@ -585,6 +608,7 @@
 
   function showResult(rec) {
     LAST_REC = rec;
+    resLabels(false);
     $('#res-title').textContent = rec.score >= 85 ? '漂亮！动作很标准 💪' : rec.score >= 60 ? '完成！注意动作质量 🔥' : '完成！先把动作做对再冲量 🧱';
     $('#res-emoji').textContent = rec.score >= 85 ? '🏆' : '💪';
     $('#res-score').textContent = rec.score;
@@ -612,6 +636,7 @@
   }
   let LAST_REC = null;
   $('#btn-again').onclick = () => {
+    if (T.ex && T.ex.game) { openGame(T.ex.game); return; }          // 关卡再来一局
     if (T.seq) { startCircuit(T.seq.map(e => e.id)); return; }   // 循环整轮再来一遍
     openTrain(T.ex ? T.ex.id : 'squat');
   };
@@ -667,6 +692,7 @@
   }
   /* 本次复盘：数据 → 个人最佳对比 → 失分归因 → 下一步建议 */
   function buildReview(rec) {
+    if (rec.game) return gameReviewLines(rec);
     const lines = [];
     const isTime = rec.mode === 'time';
     const unit = isTime ? rec.valid + ' 秒' : rec.valid + ' 次';
@@ -712,6 +738,207 @@
     return head + '。最常失分：「' + ((X.ISSUES[w[0][0]] || {}).msg || w[0][0]) + '」占问题次数 ' + pct + '%' +
       (ISSUE_ADVICE[w[0][0]] ? '；' + ISSUE_ADVICE[w[0][0]] : '') + '。';
   }
+
+  /* ---------------- 体感关卡（游戏化：复用同一套姿态引擎） ----------------
+   * 健身 App 留存靠“今天想再来玩一局”，所以把动作包成关卡：
+   * 左右移动=跨步、举手=挥臂、蹲下=护盾，玩的时候动作幅度比数翻倍。 */
+  const GAME_DUR = 60;
+  const GAME_PAR = { collect: 22, dodge: 16, guard: 12 };   // 60 秒“标准线”，用于把关卡得分折算成 0-100 表现分
+  let G = null;                                             // 当前关卡实例（X.makeGame）
+  let GAME_SEL = 'collect';
+
+  function bodyCenter(lm) {                                 // 髋中心在画面上的左右位置（镜像后与用户看到的一致）
+    if (!lm) return 0.5;
+    const hip = X.mid(lm[L.L_HIP], lm[L.R_HIP]);
+    const W = $('#cam').videoWidth || 1280;
+    const x = hip.x / W;
+    return Math.max(0, Math.min(1, DB.set.mirror ? 1 - x : x));
+  }
+  function gameInput(lm) {
+    const H = $('#cam').videoHeight || 720;
+    const shoY = Math.min(lm[L.L_SHO].y, lm[L.R_SHO].y);
+    const wriY = Math.min(lm[L.L_WRI].y, lm[L.R_WRI].y);
+    const kl = X.ang(lm[L.L_HIP], lm[L.L_KNEE], lm[L.L_AN]);
+    const kr = X.ang(lm[L.R_HIP], lm[L.R_KNEE], lm[L.R_AN]);
+    return { x: bodyCenter(lm), armsUp: wriY < shoY - H * 0.04, squat: Math.min(kl, kr) < 125 };
+  }
+  function gameEx(kind) {
+    const k = X.GAME_KINDS[kind];
+    return {
+      id: 'game-' + kind, game: kind, name: k.name, ico: k.ico, view: 'front', seated: false,
+      mode: 'game', target: GAME_DUR, sets: 1, met: k.met, free: true, desc: k.desc,
+      setup: '留出左右各一步的空间，全身入镜，手机横过来更稳。' + k.desc + '，60 秒一局。',
+      tips: [k.desc, '左右跨步就是训练：幅度越大、移动越快，运动量越足',
+        '身体中心对准画面中线站好再开始', '不计免费训练额度，玩多久都行'],
+      keys: [0, 11, 12, 15, 16, 23, 24, 25, 26, 27, 28],
+      start: lm => { const c = bodyCenter(lm); return c > 0.32 && c < 0.68; }   // 校准：站回中间再开局
+    };
+  }
+  function openGame(kind) {
+    if (!X.GAME_KINDS[kind]) return;
+    const ex = gameEx(kind);
+    G = X.makeGame(kind, { duration: GAME_DUR, hp: 3 });
+    Object.assign(T, { ex, tracker: null, phase: 'setup', setIdx: 0, validSet: 0, validTot: 0, attempts: 0,
+      issues: {}, timeSec: 0, badSec: 0, activeMs: 0, poseOkMs: 0, liveAt: {}, fbAt: {},
+      clip: [], clipNext: 0, clipSize: null, seq: null, seqIdx: 0, circuitStats: null, briefed: {} });
+    $('#modal-game').hidden = true;
+    go('train');
+    state.lastHands = null;
+    $('#hud').hidden = true; $('#mask-rest').hidden = true;
+    fillTrainChrome(ex);
+    $('#setup-ico').textContent = ex.ico;
+    $('#setup-title').textContent = '体感关卡 · ' + ex.name;
+    $('#mask-setup').hidden = false;
+    startTipRotator();
+    bootPreview();
+  }
+  function gameHud() {
+    if (!G) return;
+    const S = G.S;
+    $('#hud-rep').textContent = S.score;
+    $('#hud-target').textContent = '分 · 剩 ' + Math.ceil(G.left()) + 's';
+    $('#hud-set').textContent = '❤'.repeat(S.hp) + '♡'.repeat(Math.max(0, S.hpMax - S.hp)) +
+      ' · 连击 ' + S.combo + '（最高 ' + S.best + '）';
+    $('#hud-phase').textContent = X.GAME_KINDS[S.kind].desc + ' · 第 ' + S.level + ' 档';
+  }
+  function drawGame(canvas, lm) {
+    if (!canvas || !G) return;
+    const ctx = canvas.getContext('2d'), W = canvas.width, H = canvas.height, S = G.S;
+    const zoneY = S.kind === 'collect' ? 0.85 : (S.kind === 'dodge' ? 0.62 : 0.42);
+    ctx.save();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    S.objs.forEach(q => {
+      const x = q.x * W, y = q.y * H;
+      if (q.type === 'laser') {
+        ctx.fillStyle = 'rgba(255,90,99,.16)';
+        ctx.fillRect(x - W * 0.13, 0, W * 0.26, y);
+        ctx.strokeStyle = '#ff5a63'; ctx.lineWidth = 4;
+        ctx.shadowColor = 'rgba(255,90,99,.9)'; ctx.shadowBlur = 16;
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, y); ctx.stroke(); ctx.shadowBlur = 0;
+      } else if (q.type === 'bar') {
+        ctx.fillStyle = S.shield ? 'rgba(57,217,138,.3)' : 'rgba(255,138,60,.3)';
+        ctx.fillRect(0, y - H * 0.028, W, H * 0.056);
+        ctx.strokeStyle = S.shield ? '#39d98a' : '#ff8a3c'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      } else {
+        ctx.font = Math.round(H * (q.type === 'starHi' ? 0.062 : 0.05)) + 'px serif';
+        ctx.fillText(q.type === 'starHi' ? '🌟' : '⭐', x, y);
+      }
+    });
+    /* 判定线 + 玩家接球台（跟随髋中心） */
+    ctx.setLineDash([7, 9]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.28)';
+    ctx.beginPath(); ctx.moveTo(0, zoneY * H); ctx.lineTo(W, zoneY * H); ctx.stroke();
+    ctx.setLineDash([]);
+    const px = bodyCenter(lm) * W;
+    ctx.shadowColor = 'rgba(37,182,240,.95)'; ctx.shadowBlur = 18; ctx.fillStyle = '#25b6f0';
+    roundRect(ctx, px - W * 0.075, zoneY * H - H * 0.012, W * 0.15, H * 0.024, H * 0.012); ctx.fill();
+    if (S.kind === 'guard') {
+      ctx.strokeStyle = S.shield ? '#39d98a' : 'rgba(255,255,255,.4)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(px, H * 0.52, W * 0.09, Math.PI, 0); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function gameFrame(lm, dt) {
+    if (!G) return;
+    const evs = G.step(gameInput(lm), dt);
+    drawGame($('#skel'), lm);
+    gameHud();
+    evs.forEach(e => {
+      if (e.ev === 'catch' || e.ev === 'shield') {
+        sfx.good(); $('#hud-rep').classList.remove('pop'); void $('#hud-rep').offsetWidth;
+        $('#hud-rep').classList.add('pop');
+        feedback(e.ev === 'shield' ? '🛡 挡住 +2' : (e.hi ? '🌟 高星 +3，举手漂亮' : '⭐ +1'),
+          'good', 'g' + e.score, e.combo > 0 && e.combo % 6 === 0, 120);
+        if (e.combo === 8) speak('连击 8 个，漂亮', true);
+      } else if (e.ev === 'miss') feedback('⭐ 掉了：脚步跟上', 'warn', 'gmiss', false, 1600);
+      else if (e.ev === 'near') feedback('🙌 高星要把手举过肩膀', 'warn', 'gnear', true, 4500);
+      else if (e.ev === 'dodge') sfx.tick();
+      else if (e.ev === 'hurt') { sfx.bad(); feedback('💥 被打中！剩 ' + e.hp + ' 格血', 'bad', 'ghurt', true, 0); }
+      else if (e.ev === 'level') feedback('⚡ 提速：第 ' + e.level + ' 档', 'warn', 'glv', true, 0);
+      else if (e.ev === 'over') endGame(e.why);
+    });
+  }
+  function bestGame(kind) {
+    const rs = DB.records.filter(r => r.game === kind);
+    return rs.length ? Math.max(...rs.map(r => r.valid)) : null;
+  }
+  function endGame(why) {
+    if (!G) return;
+    const S = G.S, k = X.GAME_KINDS[S.kind], par = GAME_PAR[S.kind] || 20;
+    const mins = S.t / 60000;
+    const rec = { ts: Date.now(), ex: 'game-' + S.kind, name: k.name, game: S.kind, mode: 'game',
+      target: GAME_DUR, valid: S.score, attempts: S.score, secs: Math.round(S.t),
+      cal: +(k.met * DB.set.weight * mins).toFixed(1),
+      score: Math.max(20, Math.min(100, Math.round(100 * S.score / par))),
+      combo: S.best, over: why, issues: {} };
+    DB.records.unshift(rec); DB.records = DB.records.slice(0, 200); save();
+    stopLoop(); stopTipRotator(); T.phase = 'off'; G = null;
+    $('#hud').hidden = true; $('#mask-calib').hidden = true; $('#mask-setup').hidden = true;
+    showGameResult(rec);
+  }
+  function resLabels(game) {              // 结果页的表头随玩法切换，不让关卡分数被误读成有效次数
+    $('#lab-reps').textContent = game ? '关卡得分' : '有效次数';
+    $('#lab-bad').textContent = game ? '最高连击' : '无效次数';
+    $('#btn-again').textContent = game ? '🎮 再来一局' : '再来一组';
+  }
+  function showGameResult(rec) {
+    LAST_REC = rec;
+    LAST_REVIEW = null;
+    const best = bestGame(rec.game);
+    resLabels(true);
+    $('#res-emoji').textContent = '🎮';
+    $('#res-title').textContent = (rec.over === 'hp' ? '血量耗尽！' : '时间到！') +
+      (rec.score >= 85 ? '这局打得漂亮 🏆' : rec.score >= 60 ? '手感不错，还能更高 🔥' : '先把玩法跑顺，分数自然上来 🧱');
+    $('#res-score').textContent = rec.score;
+    $('#res-reps').textContent = rec.valid;
+    $('#res-bad').textContent = rec.combo;
+    $('#res-dur').textContent = rec.secs + 's';
+    $('#res-cal').textContent = rec.cal;
+    $('#res-issues').innerHTML =
+      '<div class="ri"><span>关卡得分（标准线 ' + (GAME_PAR[rec.game] || 20) + '）</span><b>' + rec.valid + '</b></div>' +
+      '<div class="ri"><span>最高连击</span><b>×' + rec.combo + '</b></div>' +
+      '<div class="ri"><span>本局结束方式</span><b>' + (rec.over === 'hp' ? '血量耗尽' : '60 秒到') + '</b></div>' +
+      (best != null ? '<div class="ri"><span>' + (rec.valid >= best ? '🎉 新的关卡最佳' : '历史最佳 ' + best + ' 分，差 ' + (best - rec.valid) + ' 分') + '</span></div>' : '');
+    $('#btn-replay').hidden = true;
+    $('#res-review').hidden = true; $('#btn-review').hidden = true;
+    renderReview(rec);
+    checkGoal();
+    go('result'); sfx.finish();
+    speak(X.GAME_KINDS[rec.game].name + '结束，得分 ' + rec.valid + ' 分', true);
+  }
+  /* 关卡复盘：不卖数字，说清“为什么这个分”与“下一局改什么” */
+  function gameReviewLines(rec) {
+    const lines = [];
+    const par = GAME_PAR[rec.game] || 20;
+    const k = X.GAME_KINDS[rec.game];
+    lines.push('本局「' + k.name + '」：得分 ' + rec.valid + '，最高连击 ' + rec.combo +
+      '，用时 ' + rec.secs + ' 秒（' + (rec.over === 'hp' ? '血量耗尽结束' : '60 秒打满') + '）。');
+    const best = bestGame(rec.game);
+    if (best != null && rec.valid >= best) lines.push('🎉 这是你的关卡新纪录（' + rec.valid + ' 分），下一局的目标是稳住它再抬高一档。');
+    else if (best != null) lines.push('你在这个关卡的最好成绩是 ' + best + ' 分，这次差 ' + (best - rec.valid) + ' 分，差距在连击而不是反应。');
+    else lines.push('第一次打这个关卡，' + (rec.valid >= par ? '已经超过标准线 ' + par + ' 分，上手很快。' : '先以超过标准线 ' + par + ' 分为目标。'));
+    if (rec.combo >= 8) lines.push('连击能稳到 ' + rec.combo + ' 个，说明身体跟上了节奏；下一局把幅度拉开，移动到位再接。');
+    else lines.push('连击只有 ' + rec.combo + ' 个：不要碎步追着物体跑，提前看下一波的位置，一步到位再接。');
+    lines.push(k.desc + '；' + (rec.game === 'guard' ? '蹲得越低护盾越稳，膝盖对准脚尖' :
+      rec.game === 'dodge' ? '跨步幅度拉开，别停在两栏中间' : '高星要举手过肩，普通星弯腰也要接住') + '。');
+    return { lines, text: lines.join(' ') };
+  }
+  /* 首页 / 弹窗：关卡选择 */
+  $('#btn-game').onclick = () => { renderGamePicker(); $('#modal-game').hidden = false; };
+  function renderGamePicker() {
+    $('#game-kinds').innerHTML = Object.keys(X.GAME_KINDS).map(kind => {
+      const k = X.GAME_KINDS[kind], b = bestGame(kind);
+      return '<div class="game-card' + (kind === GAME_SEL ? ' on' : '') + '" data-game="' + kind + '">' +
+        '<div class="ico">' + k.ico + '</div><h4>' + k.name + '</h4><div class="desc">' + k.desc + '</div>' +
+        '<div class="meta"><span>60 秒</span><span>' + (b != null ? '最佳 ' + b + ' 分' : '未挑战') + '</span></div></div>';
+    }).join('');
+    $('#btn-game-start').textContent = '开始：' + X.GAME_KINDS[GAME_SEL].name;
+  }
+  $('#game-kinds').onclick = e => {
+    const c = e.target.closest('[data-game]'); if (!c) return;
+    GAME_SEL = c.dataset.game; renderGamePicker();
+  };
+  $('#btn-game-start').onclick = () => openGame(GAME_SEL);
 
   /* ---------------- 循环训练（circuit） ---------------- */
   const CIR_DEFAULT = ['squat', 'jack', 'highknees', 'headshake'];
@@ -799,6 +1026,7 @@
     st.forEach(r => Object.entries(r.issues || {}).forEach(([k, v]) => merged[k] = (merged[k] || 0) + v));
     LAST_REC = { ts: Date.now(), ex: 'circuit', name: '循环训练', mode: 'reps', target: 0,
       valid: totValid, attempts: totValid + totBad, secs: totSecs, cal: totCal, score, issues: merged };
+    resLabels(false);
     $('#res-emoji').textContent = '🔁';
     $('#res-title').textContent = '循环打完！' + st.length + ' 个动作全部完成' + (score >= 85 ? '，动作在线 💪' : '，质量为王 🔥');
     $('#res-score').textContent = score;
@@ -950,11 +1178,13 @@
     g.fillStyle = '#8db4e8'; g.font = '600 34px system-ui'; g.fillText('◉ 动镜 DongJing', 360, 96);
     g.fillStyle = '#5c7aa6'; g.font = '20px system-ui'; g.fillText('网页 AI 体感私教 · 只计标准有效次数', 360, 132);
     const ex = X.EXERCISES.find(e => e.id === rec.ex);
-    g.font = '72px serif'; g.fillText(rec.ex === 'circuit' ? '🔁' : (ex && ex.ico) || '💪', 360, 640);
+    g.font = '72px serif';
+    g.fillText(rec.game ? X.GAME_KINDS[rec.game].ico : rec.ex === 'circuit' ? '🔁' : (ex && ex.ico) || '💪', 360, 640);
     g.fillStyle = '#fff'; g.font = 'bold 118px system-ui';
     g.fillText(rec.mode === 'time' ? rec.valid + 's' : String(rec.valid), 360, 782);
     g.fillStyle = '#8db4e8'; g.font = '26px system-ui';
-    g.fillText((rec.name || '') + ' · 标准有效' + (rec.mode === 'time' ? '时长' : '次数'), 360, 822);
+    g.fillText((rec.name || '') + ' · ' + (rec.game ? '关卡得分 / 连击 ×' + rec.combo
+      : '标准有效' + (rec.mode === 'time' ? '时长' : '次数')), 360, 822);
     [['动作评分', rec.score], ['千卡', rec.cal], ['时长', rec.secs + 's']].forEach((it, i) => {
       const x = 140 + i * 220;
       g.fillStyle = 'rgba(255,255,255,.06)'; roundRect(g, x - 92, 856, 184, 108, 16); g.fill();
@@ -1073,7 +1303,8 @@
   }
   function weekValidReps() {
     const from = dayStart(Date.now()) - 6 * 864e5;
-    return DB.records.filter(r => r.ts >= from).reduce((s, r) => s + r.valid, 0);
+    /* 关卡分数不是“有效次数”，不计进动作统计，只算训练次数 */
+    return DB.records.filter(r => r.ts >= from && r.mode !== 'game').reduce((s, r) => s + r.valid, 0);
   }
   function streakDays() {
     const days = new Set(DB.records.map(r => dayStart(r.ts)));
@@ -1082,11 +1313,12 @@
     while (days.has(d)) { n++; d -= 864e5; }
     return n;
   }
-  /* 训练点：计次动作 1 有效次=1 点，计时动作每 10s=1 点 */
+  /* 训练点：计次动作 1 有效次=1 点，计时动作每 10s=1 点，关卡得分÷3（玩也要给进度感） */
   function todayPoints() {
     const s = dayStart(Date.now());
     return DB.records.filter(r => r.ts >= s)
-      .reduce((a, r) => a + (r.mode === 'time' ? Math.round(r.valid / 10) : r.valid), 0);
+      .reduce((a, r) => a + (r.mode === 'game' ? Math.round(r.valid / 3)
+        : r.mode === 'time' ? Math.round(r.valid / 10) : r.valid), 0);
   }
   function renderGoal() {
     const goal = DB.set.dailyGoal | 0, p = todayPoints();
@@ -1119,7 +1351,7 @@
     $('#hist-list').innerHTML = DB.records.length
       ? '<div class="hist-row head"><span>时间</span><span>动作</span><span>有效</span><span>评分</span><span>千卡</span></div>' +
         DB.records.slice(0, 40).map(r =>
-          '<div class="hist-row"><span>' + fmtDate(r.ts) + '</span><span>' + r.name + (r.mode === 'time' ? '（' + r.valid + 's）' : '') + '</span><b>' + (r.mode === 'time' ? r.valid + 's' : r.valid + '/' + r.attempts) + '</span><span>' + r.score + '</span><span>' + r.cal + '</span></div>').join('')
+          '<div class="hist-row"><span>' + fmtDate(r.ts) + '</span><span>' + r.name + (r.mode === 'game' ? ' 🎮' : (r.mode === 'time' ? '（' + r.valid + 's）' : '')) + '</span><b>' + (r.mode === 'game' ? r.valid + ' 分' : r.mode === 'time' ? r.valid + 's' : r.valid + '/' + r.attempts) + '</span><span>' + r.score + '</span><span>' + r.cal + '</span></div>').join('')
       : '<div class="empty-tip">暂无记录，去首页开始第一次训练吧</div>';
   }
 
@@ -1161,7 +1393,7 @@
 
   /* ---------------- 启动 ---------------- */
   renderHome(); renderMe(); refreshChip();
-  window.__dongjing = { state, DB, T };   // 调试句柄：控制台可读 lastLm/训练状态做远程诊断
+  window.__dongjing = { state, DB, T, get G() { return G; }, openGame };   // 调试句柄：控制台可读 lastLm/训练/关卡状态做远程诊断
   document.addEventListener('keydown', e => {
     const openModal = $$('.modal').find(m => !m.hidden);
     if (e.key === 'Escape' && openModal) { openModal.hidden = true; return; }

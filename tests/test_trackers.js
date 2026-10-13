@@ -165,6 +165,54 @@ function mkHand(tipDist) {
   if (p5.ids.length < 3 || !/均衡/.test(p5.why[0])) process.exit(1);
 }
 
+/* --- 体感关卡：三种关卡的判定与生命周期 --- */
+{
+  const dt = 33;
+  const rnd = (seed => () => (seed = seed * 9301 % 49297) / 49297)(12345);
+
+  /* 收集：追着星星跑能接到；星星落地不扣命 */
+  const g1 = X.makeGame('collect', { duration: 20, rnd });
+  let ev1 = { catch: 0, miss: 0 };
+  for (let i = 0; i < 700; i++) {
+    const S = g1.S;
+    const st = S.objs.find(q => q.type === 'star') || S.objs.find(q => q.type === 'starHi');
+    const inp = { x: st ? st.x : 0.5, armsUp: !!S.objs.find(q => q.type === 'starHi'), squat: false };
+    g1.step(inp, dt).forEach(e => { if (ev1[e.ev] != null) ev1[e.ev]++; });
+  }
+  console.log('[关卡-收集] 接到 =', ev1.catch, '落地 =', ev1.miss, '分数 =', g1.S.score, '剩余时间 =', Math.round(g1.left()));
+  if (ev1.catch < 3 || g1.S.hp !== g1.S.hpMax || g1.S.over !== true) process.exit(1);
+
+  /* 闪避：站在一侧不动，同侧激光判 hurt，3 命耗尽即结束 */
+  const g2 = X.makeGame('dodge', { duration: 60, rnd });
+  let over2 = null;
+  for (let i = 0; i < 1200 && !over2; i++) {
+    const evs = g2.step({ x: 0.25 }, dt);
+    over2 = evs.find(e => e.ev === 'over');
+  }
+  console.log('[关卡-闪避] 得分 =', g2.S.score, '生命 =', g2.S.hp, '结束原因 =', over2 && over2.why);
+  if (!over2 || over2.why !== 'hp' || g2.S.hp !== 0 || g2.S.score < 1) process.exit(1);
+
+  /* 深蹲护盾：蹲下只出 shield，不蹲必 hurt；both 对比 */
+  const run = squat => { const g = X.makeGame('guard', { duration: 25, rnd }); const c = { shield: 0, hurt: 0 };
+    for (let i = 0; i < 800; i++) g.step({ x: 0.5, squat }, dt).forEach(e => { if (c[e.ev] != null) c[e.ev]++; });
+    return { c, S: g.S }; };
+  const a = run(true), b = run(false);
+  console.log('[关卡-护盾] 蹲：', JSON.stringify(a.c), '分数', a.S.score, '/ 不蹲：', JSON.stringify(b.c), '结束', b.S.over);
+  if (a.c.shield < 3 || a.c.hurt !== 0 || b.c.hurt < 3 || b.S.over !== true) process.exit(1);
+
+  /* 难度递进 + 时长收口 */
+  const g5 = X.makeGame('collect', { duration: 34, rnd });
+  let lvSeen = 1, why = null, hi = 0;
+  for (let i = 0; i < 1100; i++) g5.step({ x: 0.5 }, dt).forEach(e => {
+    if (e.ev === 'level') lvSeen = e.level;
+    if (e.ev === 'catch' && e.hi) hi++;
+    if (e.ev === 'over') why = e.why;
+  });
+  console.log('[关卡-递进] level =', g5.S.level, '末次档位 =', lvSeen, '高星加分 =', hi, '结束 =', why);
+  if (g5.S.level < 3 || why !== 'time') process.exit(1);
+  if (!X.GAME_KINDS || Object.keys(X.GAME_KINDS).length !== 3) process.exit(1);
+}
+
 /* --- 元数据完整性：10 动作、keys/start 均存在，坐姿系标记 --- */
 {
   const ids = X.EXERCISES.map(e => e.id);

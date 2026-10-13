@@ -601,9 +601,96 @@
     };
   }
 
+  /* ================= 体感关卡（游戏化）=================
+   * 纯逻辑、无 DOM：输入只有身体中心 x / 是否举臂 / 是否蹲下，输出事件数组，
+   * 渲染与音效在 app.js。三个关卡分别逼出三种动作：跨步移动 / 举手挥臂 / 深蹲。 */
+  const GAME_KINDS = {
+    collect: { name: '星星收集', ico: '⭐', met: 6.5, desc: '左右跨步接星星，高星要举手', need: 'arms' },
+    dodge:   { name: '激光闪避', ico: '⚡', met: 7.5, desc: '身体待在空的一侧，别碰激光', need: 'step' },
+    guard:   { name: '深蹲护盾', ico: '🛡', met: 5.5, desc: '横梁压下时蹲下去护住自己', need: 'squat' }
+  };
+  function makeGame(kind, opts) {
+    const o = opts || {};
+    const dur = o.duration || 60, hpMax = o.hp || 3;
+    const S = { kind: GAME_KINDS[kind] ? kind : 'collect', t: 0, score: 0, combo: 0, best: 0,
+      hp: hpMax, hpMax, level: 1, over: false, objs: [], next: 0.6, spawn: 1.4, shield: false, events: [] };
+    const rnd = o.rnd || Math.random;
+    function spawn() {
+      const k = S.kind;
+      if (k === 'guard') {
+        S.objs.push({ type: 'bar', x: 0.5, y: -0.2, vy: 0.34 + S.level * 0.035, done: false });
+        S.spawn = Math.max(1.6, 3.4 - S.level * 0.2);
+      } else if (k === 'dodge') {
+        const side = rnd() < 0.5 ? 0.25 : 0.75;
+        S.objs.push({ type: 'laser', x: side, y: -0.15, vy: 0.42 + S.level * 0.05, done: false });
+        S.spawn = Math.max(0.75, 1.7 - S.level * 0.12);
+      } else {
+        const high = S.level >= 2 && rnd() < 0.34;
+        S.objs.push(high
+          ? { type: 'starHi', x: 0.12 + rnd() * 0.76, y: 0.4, vy: 0, life: 2.2, done: false }   /* 挂在上方：必须举手 */
+          : { type: 'star', x: 0.1 + rnd() * 0.8, y: -0.1, vy: 0.36 + S.level * 0.045, done: false });
+        S.spawn = Math.max(0.55, 1.25 - S.level * 0.1);
+      }
+    }
+    function hit(ev, extra) { S.events.push(Object.assign({ ev }, extra || {})); }
+    return {
+      S,
+      step(input, dtMs) {
+        const dt = Math.min(120, dtMs || 16) / 1000;
+        S.events = [];
+        if (S.over) return S.events;
+        S.t += dt;
+        const lv = 1 + Math.floor(S.t / 15);
+        if (lv !== S.level) { S.level = lv; hit('level', { level: lv }); }
+        const px = Math.max(0, Math.min(1, input && input.x != null ? input.x : 0.5));
+        S.shield = !!(input && input.squat) && S.kind === 'guard';
+        S.next -= dt;
+        if (S.next <= 0) { spawn(); S.next = S.spawn; }
+        for (let i = S.objs.length - 1; i >= 0; i--) {
+          const q = S.objs[i];
+          q.y += q.vy * dt;
+          if (S.kind === 'guard') {                       /* 横梁到胸部高度时判定护盾 */
+            if (!q.done && q.y >= 0.42) {
+              q.done = true;
+              if (S.shield) { S.score += 2; S.combo++; hit('shield', { score: S.score, combo: S.combo }); }
+              else { S.hp--; S.combo = 0; hit('hurt', { hp: S.hp, combo: 0 }); }
+            }
+          } else if (S.kind === 'dodge') {
+            if (!q.done && q.y >= 0.62) {
+              q.done = true;
+              const sameSide = (q.x < 0.5) === (px < 0.5);
+              if (Math.abs(q.x - px) < 0.28 && sameSide) { S.hp--; S.combo = 0; hit('hurt', { hp: S.hp }); }
+              else { S.score += 1; S.combo++; hit('dodge', { score: S.score, combo: S.combo }); }
+            }
+          } else if (q.type === 'starHi') {              /* 高星不下落，限时 2.2s：举手 + 走到下方才接得到 */
+            q.life -= dt;
+            if (input && input.armsUp && Math.abs(q.x - px) < 0.15) {
+              q.done = true; S.score += 3; S.combo++;
+              hit('catch', { score: S.score, combo: S.combo, hi: true });
+            } else if (q.life <= 0) { q.done = true; hit('near', {}); }
+            if (q.done || q.life <= 0) S.objs.splice(i, 1);
+            continue;
+          } else if (!q.done && q.y >= 0.7 && q.y <= 0.99 && Math.abs(q.x - px) < 0.12) {
+            q.done = true; S.score++; S.combo++;
+            hit('catch', { score: S.score, combo: S.combo, hi: false });
+          }
+          if (q.done || q.y > 1.2) {
+            if (!q.done && S.kind === 'collect') { S.combo = 0; hit('miss', {}); }   /* 星星落地：只断连击，不扣命 */
+            S.objs.splice(i, 1);
+          }
+        }
+        if (S.combo > S.best) S.best = S.combo;
+        if (S.hp <= 0) { S.hp = 0; S.over = true; hit('over', { why: 'hp', score: S.score }); }
+        else if (S.t >= dur) { S.over = true; hit('over', { why: 'time', score: S.score }); }
+        return S.events;
+      },
+      left() { return S.over ? 0 : Math.max(0, dur - S.t); }
+    };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
-    ISSUES, EXERCISES, analyzePosture, planFromText,
+    ISSUES, EXERCISES, analyzePosture, planFromText, GAME_KINDS, makeGame,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,
