@@ -129,6 +129,8 @@
 
 - ✅ **v3.0 已交付（训练构成：你是“力量型”还是“玩家型”）**：① `modeSplit(records)` 纯函数—按练法把记录分入 `MODE_SPLIT` 四类（计次训练 / 计时静力 / 体感关卡 / 循环跟练），逐类累加 sessions / points，返回 `{cats(4),totalSessions,totalPoints,dominantKey,dominantName}`；② **归类优先级 circuit → game → time → reps**：先看 `ex==='circuit'`（循环记录 mode 仍为 reps，靠 id 识别），再按 `mode` 分 game/time，其余归 reps；③ **与部位覆盖正交**（一个看练哪块肌肉、一个看练法构成），points 继续复用 `recPoints`（与目标环/热力图/成就/时段一套）、非有限 ts/null 丢弃不崩；dominant 按节数优先、平手按点数决胜；④ 渲染四行横向迷你条（宽=sessions/max）、主导类加 best 高亮，右侧显占比百分比，副标题“你是「X」型 · 共 N 节 / M 点”；⑤ 单测覆盖四类恰 4 类、空数据 tot0/dom null、null 入参不崩、混合分类（circuit 优先于 mode、game 得分÷3、time 秒÷10、reps 直取）与非有限 ts/null/无 ts 丢弃、主导平手按点数决胜；浏览器冒烟注入“计次×3 + 计时 + 关卡 + 循环”混合 6 节，DOM 4 行与 `DJX.modeSplit` 逐行 sessions/points/pct/best 零偏差、主导=计次训练、共 6 节 / 70 点、0 console error。
 
+- ✅ **v3.1 已交付（表现走势：“你的动作质量在进还是在退”）**：① `scoreTrend(records)` 纯函数—只取 `Number.isFinite(ts) && Number.isFinite(score) && score>0` 的记录按 ts 升序，等分成最多 `SCORE_TREND_MAX_SEG=5` 段（余数分给前段，逐段 `{i,n,avg,fromTs,toTs}`），返回 `{enough,n,segments,firstAvg,lastAvg,overallAvg,delta,trend,bestAvg,bestIdx}`；② **三种走势判定**：`delta=lastAvg-firstAvg`，≥+5 为 up（质量提升）、≤-5 为 down（质量下滑）、其余 flat；bestIdx 标记均分最高的一段；③ **与已有卡正交**（issueTrend 看问题频率轨迹、weekCompare 比训练量点数，本卡看总体评分质量轨迹）；只看有评分记录、不足 2 条/null 不崩；④ 渲染为一列竖向迷你柱（高=avg/最大 avg）、最高段加 best、末段按 up/down 加绿/橙，hover 看该段节数与日历区间，副标题“共 N 节有评分 · 均分 X · <走势结论>”；⑤ 单测覆盖空/null/1 条 enough=false、无 score/score<=0/非有限 ts 过滤、乱序传入验证排序与 5 段划分（first15/last95/delta80/up/overall53/bestIdx4）、首段含余数、down/flat 两路；浏览器冒烟注入 8 节递升评分（50→95），DOM 5 段 val=[53,63,80,90,95]、末段 best+last+up、副标题“共 8 节有评分 · 均分 72 · 动作质量在稳步提升 ↑”与 `DJX.scoreTrend` 逐段零偏差、0 console error。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；

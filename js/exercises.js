@@ -1488,12 +1488,42 @@
     return { cats, totalSessions, totalPoints, dominantKey: dominant ? dominant.key : null, dominantName: dominant ? dominant.name : '' };
   }
 
+  /* ================= 表现走势（v3.1）=================
+   * 把有评分的记录按时间升序等分成最多 5 段，逐段算平均表现分，看动作质量整体是
+   * 在上升还是下降。与纠错趋势（v2.9）正交：那个看逐个问题的频率轨迹，这个看总体评分
+   * 质量的轨迹；与周环比（v2.3）也不同：那个比训练量（点数），这个比质量（评分）。 */
+  const SCORE_TREND_MAX_SEG = 5;
+  function scoreTrend(records) {
+    const rs = (Array.isArray(records) ? records : []).filter(r => r && Number.isFinite(r.ts) && Number.isFinite(r.score) && r.score > 0);
+    rs.sort((a, b) => a.ts - b.ts);
+    const n = rs.length;
+    if (n < 2) return { enough: false, segments: [], n };
+    const segCount = Math.min(SCORE_TREND_MAX_SEG, n);
+    const base = Math.floor(n / segCount), rem = n % segCount;
+    const segments = [];
+    let idx = 0;
+    for (let s = 0; s < segCount; s++) {
+      const size = base + (s < rem ? 1 : 0);
+      const slice = rs.slice(idx, idx + size); idx += size;
+      const avg = Math.round(slice.reduce((a, r) => a + r.score, 0) / slice.length);
+      segments.push({ i: s, n: slice.length, avg, fromTs: slice[0].ts, toTs: slice[slice.length - 1].ts });
+    }
+    const firstAvg = segments[0].avg, lastAvg = segments[segments.length - 1].avg;
+    const overallAvg = Math.round(rs.reduce((a, r) => a + r.score, 0) / n);
+    const delta = lastAvg - firstAvg;
+    let trend = 'flat';
+    if (delta >= 5) trend = 'up'; else if (delta <= -5) trend = 'down';
+    let best = segments[0];
+    segments.forEach(x => { if (x.avg > best.avg) best = x; });
+    return { enough: true, n, segments, firstAvg, lastAvg, overallAvg, delta, trend, bestAvg: best.avg, bestIdx: best.i };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

@@ -440,6 +440,19 @@ h3{font-size:18px}
 .ms-row.best .ms-name{color:var(--hl); font-weight:700}
 .ms-row.best .ms-bar i{background:var(--hl)}
 .ms-row.best .ms-num{color:var(--hl)}
+/* ---- v3.1 表现走势 ---- */
+.st-spark{display:flex; align-items:flex-end; gap:8px; height:84px; margin-top:12px}
+.st-seg{flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; height:100%}
+.st-val{font-size:11px; color:var(--muted); line-height:1}
+.st-bar{position:relative; flex:1; width:58%; max-width:38px; background:#1a2434; border-radius:7px; overflow:hidden}
+.st-bar i{position:absolute; bottom:0; left:0; right:0; background:var(--hl2); border-radius:7px; min-height:3px}
+.st-seg.best .st-bar i{background:var(--hl)}
+.st-seg.best .st-val{color:var(--hl); font-weight:700}
+.st-seg.last.up .st-bar i{background:var(--hl)}
+.st-seg.last.down .st-bar i{background:var(--warn)}
+.st-verdict{font-weight:700}
+.st-verdict.up{color:var(--hl)}
+.st-verdict.down{color:var(--warn)}
 
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}

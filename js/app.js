@@ -1568,6 +1568,7 @@
     renderCoverage();
     renderIssueTrend();
     renderMode();
+    renderScoreTrend();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1768,6 +1769,26 @@
     }).join('');
     const sum = $('#ms-sum');
     if (sum) sum.textContent = '你是「' + ms.dominantName + '」型 · 共 ' + ms.totalSessions + ' 节 / ' + ms.totalPoints + ' 点';
+  }
+
+  /* 表现走势：scoreTrend 纯逻辑把带评分的记录按时序分段算均分，这里画一列竖向迷你柱看质量升降 */
+  function renderScoreTrend() {
+    const box = $('#st-chart'); if (!box) return;
+    const sum = $('#st-sum');
+    const st = X.scoreTrend(DB.records);
+    if (!st.enough) { box.innerHTML = '<div class="empty-tip">至少练出 2 次带评分的训练，才能看出动作质量的走势</div>'; if (sum) sum.textContent = ''; return; }
+    const VERDICT = { up: { t: '动作质量在稳步提升 ↑', c: 'up' }, down: { t: '最近平均分掉了，注意把动作做标准 ↓', c: 'down' }, flat: { t: '动作质量保持平稳 ·', c: '' } };
+    const maxA = Math.max(1, ...st.segments.map(s => s.avg));
+    const lastI = st.segments.length - 1;
+    box.innerHTML = '<div class="st-spark">' + st.segments.map(s => {
+      const h = Math.round(s.avg / maxA * 100);
+      const cls = (s.i === st.bestIdx ? ' best' : '') + (s.i === lastI ? ' last ' + st.trend : '');
+      return '<div class="st-seg' + cls + '" title="第 ' + (s.i + 1) + ' 段 · ' + s.n + ' 节 · 平均 ' + s.avg + ' 分（' + fmtDate(s.fromTs) + (s.n > 1 ? ' ~ ' + fmtDate(s.toTs) : '') + '）">' +
+        '<span class="st-val">' + s.avg + '</span>' +
+        '<span class="st-bar"><i style="height:' + h + '%"></i></span></div>';
+    }).join('') + '</div>';
+    const v = VERDICT[st.trend];
+    if (sum) sum.innerHTML = '共 ' + st.n + ' 节有评分 · 均分 ' + st.overallAvg + ' · <span class="st-verdict ' + v.c + '">' + v.t + '</span>';
   }
 
   /* ---------------- 我的 / Pro ---------------- */

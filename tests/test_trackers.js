@@ -1088,4 +1088,40 @@ function mkHand(tipDist) {
   console.log('[ms] 全部断言通过');
 }
 
+/* ================= v3.1 表现走势 scoreTrend ================= */
+{
+  const fail = m => { console.log('[st] FAIL:', m); process.exit(1); };
+
+  /* 空 / null / 不足 2 条 → enough=false */
+  if (X.scoreTrend([]).enough !== false) fail('空数据应 enough=false');
+  if (X.scoreTrend(null).enough !== false) fail('null 应 enough=false 不崩');
+  const one = X.scoreTrend([{ ts: 1, score: 80 }]);
+  if (one.enough !== false || one.n !== 1) fail('1 条应 enough=false n=1');
+
+  /* 只看有评分的记录：无 score / score<=0 / 非有限 ts 均排除 */
+  const filt = X.scoreTrend([{ ts: 1, mode: 'reps', valid: 5 }, { ts: 2, score: 0 }, { ts: NaN, score: 50 }, { ts: 3, score: 60 }, { ts: 4, score: 90 }]);
+  if (!filt.enough || filt.n !== 2) fail('应只剩 2 条有效评分记录 实际 n=' + filt.n);
+
+  /* 上升：乱序传入验证排序，首段低末段高 */
+  const up = X.scoreTrend([{ ts: 6, score: 95 }, { ts: 1, score: 10 }, { ts: 3, score: 30 }, { ts: 5, score: 90 }, { ts: 2, score: 20 }, { ts: 4, score: 70 }]);
+  if (up.segments.length !== 5) fail('6 条应分 5 段 实际 ' + up.segments.length);
+  if (up.firstAvg !== 15 || up.lastAvg !== 95) fail('首段均 15/末段均 95 实际 ' + up.firstAvg + '/' + up.lastAvg);
+  if (up.delta !== 80 || up.trend !== 'up') fail('delta80/up 实际 ' + up.delta + '/' + up.trend);
+  if (up.overallAvg !== 53) fail('总体均分应 53 实际 ' + up.overallAvg);
+  if (up.bestIdx !== 4 || up.bestAvg !== 95) fail('最佳段应 idx4/avg95 实际 ' + up.bestIdx + '/' + up.bestAvg);
+  /* 逐段记录数之和 = n，首段多拿一条余数 */
+  if (up.segments.reduce((s, x) => s + x.n, 0) !== up.n) fail('分段 n 求和应等于总 n');
+  if (up.segments[0].n !== 2) fail('6/5 首段应含余数 2 条 实际 ' + up.segments[0].n);
+
+  /* 下降：首段高末段低 */
+  const down = X.scoreTrend([{ ts: 1, score: 90 }, { ts: 2, score: 88 }, { ts: 3, score: 40 }, { ts: 4, score: 38 }]);
+  if (down.trend !== 'down' || down.delta > -5) fail('应 down 且 delta<=-5 实际 ' + down.trend + '/' + down.delta);
+
+  /* 持平：首尾差在 ±5 内 */
+  const flat = X.scoreTrend([{ ts: 1, score: 80 }, { ts: 2, score: 82 }, { ts: 3, score: 78 }, { ts: 4, score: 81 }]);
+  if (flat.trend !== 'flat') fail('首尾差小应 flat 实际 ' + flat.trend + '/' + flat.delta);
+
+  console.log('[st] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');
