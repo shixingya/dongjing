@@ -1572,6 +1572,23 @@
     const nav = $('#rep-nav'); if (!nav) return;
     nav.innerHTML = REPORT_NAV.map(n => '<button type="button" class="rep-chip" data-target="' + n.s + '">' + n.t + '</button>').join('');
   }
+  /* v3.6 scrollspy：随滚动高亮当前卡在对应 chip（纯 UI，配合 v3.4 锚点导航） */
+  function repSpy() {
+    if (curScreen !== 'report') return;
+    let cur = REPORT_NAV.length ? REPORT_NAV[0].s : null;
+    for (const n of REPORT_NAV) {
+      const el = document.querySelector(n.s); if (!el) continue;
+      if (el.getBoundingClientRect().top <= 130) cur = n.s; else break;   // 卡顶探进顶部区域即算当前
+    }
+    $$('#rep-nav .rep-chip').forEach(c => c.classList.toggle('on', c.dataset.target === cur));
+  }
+  let repSpyLast = 0;
+  window.addEventListener('scroll', () => {
+    // 时间节流（非 rAF）：后台/无头标签页 rAF 不跑会令高亮卡死，时间片更健壮
+    const now = Date.now();
+    if (now - repSpyLast < 80) return;
+    repSpyLast = now; repSpy();
+  }, { passive: true });
   function renderReport() {
     renderRepNav();
     renderLifetime();
@@ -1624,6 +1641,7 @@
         DB.records.slice(0, 40).map(r =>
           '<div class="hist-row"><span>' + fmtDate(r.ts) + '</span><span>' + r.name + (r.mode === 'game' ? ' 🎮' : (r.mode === 'time' ? '（' + r.valid + 's）' : '')) + '</span><b>' + (r.mode === 'game' ? r.valid + ' 分' : r.mode === 'time' ? r.valid + 's' : r.valid + '/' + r.attempts) + '</span><span>' + r.score + '</span><span>' + r.cal + '</span></div>').join('')
       : '<div class="empty-tip">暂无记录，去首页开始第一次训练吧</div>';
+    repSpy();   // 卡片重绘后立刻同步一次高亮（chip 刚重建，不点不亮）
   }
 
   /* 生涯总览：lifetimeStats 纯逻辑跨全部记录累加，这里只画统计宫格 */

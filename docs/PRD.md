@@ -139,6 +139,8 @@
 
 - ✅ **v3.5 已交付（动作提升对比：每个动作从新手期到现在进步了多少）**：① `improvementStats(records)` 纯函数—只认 EXERCISES 真动作 id 且有限 ts + 有限 `score>0` 的记录，按动作分组、组内按 ts 升序，前半 `half=floor(n/2)` 条与后半末 half 条各自取均分（奇数节中间项两段均不参与），`delta=lastAvg-firstAvg`，≥+5 进 up、≤-5 进 down、其余 flat；返回 `{items(按 delta 降序、平手按节数),count,improved,declined}`；② **与最佳榜互补**（personalBests 看峰值、本卡看进步幅度）、与表现走势正交（那个看全局质量轨迹、这个拆到每个动作）；单节有评分的动作不进榜（没得比）、game-/circuit/非法记录全排除不崩；③ 渲染“新手期→现在”行列表（名称 + `firstAvg → lastAvg` + 进/退/持平标签，up 绿/down 橙），hover 看两段具体均分与节数，副标题“共 N 个动作可对比 · X 项在进步”；导航 chips 同步增至 16 枚（新增「提升」）；④ 单测覆盖空/null 不崩、递升 4 节（53→85/+32/up，验证 Math.round(.5) 进位）、乱序奇数 5 节验证排序与 half 划分、单节/非法/非真动作全部排除、down/flat 两路与 delta 降序排序；浏览器冒烟注入“深蹲递升 50→93 + 平板递降 80→58”，DOM 两行 nums/标签/色类与 `DJX.improvementStats` 逐项零偏差、副标题“共 2 个动作可对比 · 1 项在进步”、chipCount=16、点「提升」chip 直达 .im-card、0 console error。
 
+- ✅ **v3.6 已交付（报告页导航跟随高亮：一眼知道滚到哪张卡了）**：纯 UI 迭代不新增报表与数据口径——给 v3.4 的锚点 chips 加 scrollspy：① `repSpy()` 遵 REPORT_NAV 表序遍历各卡 `getBoundingClientRect().top`，把“顶边探进顶部 130px 内”的最后一张卡对应 chip 加 `.on` 高亮（只亮一枚）；② **时间节流而非 rAF**——初版用 `requestAnimationFrame` 节流，无头/后台标签页 rAF 不执行会令高亮永远卡死（冒烟实测），改 80ms 时间片直接执行，渲染循环冻结时仍能工作；③ **与点击跳转共用一套逻辑**：点 chip `scrollIntoView` 平滑滚动触发 scroll 事件、高亮随之跟移；`renderReport()` 末尾再同步一次（chip 刚重建需立即定当前）；④ 冒烟逐位置验证：顶部→本周、.im-card→提升、.hist-card→历史、回顶→本周均高亮正确、同时仅一枚带 `.on`、往返页面不报错、0 console error（后台标签页 dispatch scroll 后时间节流路径实走）。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；

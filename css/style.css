@@ -477,6 +477,7 @@ h3{font-size:18px}
 .rep-chip{background:#141d2b; border:1px solid var(--line); color:var(--muted); font-size:12.5px; padding:5px 12px; border-radius:999px; cursor:pointer; white-space:nowrap; transition:.15s}
 .rep-chip:hover{color:var(--txt); border-color:var(--hl2)}
 .rep-chip:active{color:var(--hl); border-color:var(--hl)}
+.rep-chip.on{color:var(--hl); border-color:var(--hl); background:#17223a; font-weight:600}
 /* ---- v3.5 动作提升对比 ---- */
 .im-rows{display:flex; flex-direction:column}
 .im-row{display:grid; grid-template-columns:1fr 92px 84px; align-items:center; gap:10px; padding:9px 4px; border-bottom:1px solid var(--line)}
