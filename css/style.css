@@ -367,6 +367,10 @@ h3{font-size:18px}
 .ach.earned .ach-meta{color:var(--hl)}
 .ach.locked{opacity:.62}
 .ach.locked .ach-ico{filter:grayscale(1) brightness(.85)}
+/* ---- v2.3 周环比小结 ---- */
+.wow{margin-top:10px; font-size:13px; color:var(--muted); line-height:1.6; border-top:1px dashed var(--line); padding-top:9px}
+.wow.up{color:var(--hl)}
+.wow.down{color:var(--warn)}
 
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}

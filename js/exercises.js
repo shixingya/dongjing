@@ -1224,12 +1224,48 @@
     return { list, earned: list.filter(b => b.earned).length, total: list.length };
   }
 
+  /* ================= 周环比小结（v2.3）=================
+   * 本周（周一起） vs 上周同一周天数，用 recPoints 口径对训练点/节数/活跃天环比，
+   * 输出一句结论。与热力图/目标环共用同一口径，不另起一套算法。 */
+  function weekCompare(records, opts) {
+    const o = opts || {};
+    const D = 864e5;
+    const ds = t => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); };
+    const mondayStart = t => { const s = ds(t); const wd = (new Date(s).getDay() + 6) % 7; return s - wd * D; };
+    const now = Number(o.today) || Date.now();
+    const curMon = mondayStart(now);
+    const prevMon = curMon - 7 * D;
+    const rs = Array.isArray(records) ? records : [];
+    const blank = () => ({ points: 0, sessions: 0, days: new Set() });
+    const cur = blank(), prev = blank();
+    rs.forEach(r => {
+      if (!r || !Number.isFinite(r.ts)) return;
+      const dayS = ds(r.ts);
+      const bucket = dayS >= curMon ? cur : (dayS >= prevMon && dayS < curMon ? prev : null);
+      if (!bucket) return;
+      const p = recPoints(r);
+      bucket.points += p; bucket.sessions++;
+      if (p > 0) bucket.days.add(dayS);
+    });
+    cur.days = cur.days.size; prev.days = prev.days.size;
+    const dPoints = cur.points - prev.points;
+    const dPct = prev.points > 0 ? Math.round(dPoints / prev.points * 100) : (cur.points > 0 ? 100 : 0);
+    let verdict;
+    if (prev.points === 0 && cur.points === 0) verdict = '两周都还没练，从今天的动作开始 ✦';
+    else if (prev.points === 0) verdict = '上周空缺，这周已攒 ' + cur.points + ' 点，好开头！';
+    else if (cur.points === 0) verdict = '这周还没开始，上周有 ' + prev.points + ' 点，先练一组破零';
+    else if (dPct >= 15) verdict = '比上周多 ' + dPct + '%，继续保持 🔥';
+    else if (dPct <= -15) verdict = '比上周少 ' + (-dPct) + '%，安排一次循环跟练补回来';
+    else verdict = '和上周基本持平（' + cur.points + ' vs ' + prev.points + ' 点）';
+    return { cur, prev, dPoints, dPct, verdict };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

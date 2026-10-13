@@ -768,4 +768,47 @@ function mkHand(tipDist) {
   console.log('[ach] 全部断言通过');
 }
 
+/* ================= v2.3 周环比小结 weekCompare ================= */
+{
+  const D = 864e5;
+  const fail = m => { console.log('[wow] FAIL:', m); process.exit(1); };
+  const today = new Date(2026, 9, 14, 12).getTime();      // 周三（2026-10-12 为周一）
+  const t0 = new Date(2026, 9, 14).getTime();
+  const mk = (o, mode, valid) => ({ ts: t0 - o * D, mode, valid });
+
+  /* 空数据 */
+  const e = X.weekCompare([], { today });
+  if (e.cur.points !== 0 || e.prev.points !== 0 || e.dPct !== 0) fail('空数据应全 0');
+  if (!/两周都还没练/.test(e.verdict)) fail('空数据 verdict 不对: ' + e.verdict);
+
+  /* 本周有、上周无 → +100% 好开头 */
+  const up = X.weekCompare([mk(0, 'reps', 20), mk(1, 'reps', 15)], { today });
+  if (up.cur.points !== 35 || up.prev.points !== 0 || up.dPct !== 100) fail('UP 数据 ' + up.cur.points + '/' + up.prev.points + '/' + up.dPct);
+  if (!/上周空缺/.test(up.verdict)) fail('UP verdict: ' + up.verdict);
+
+  /* 本周少、上周多 → ≤ -15% 建议补 */
+  const down = X.weekCompare([mk(0, 'reps', 5), mk(8, 'reps', 30), mk(9, 'reps', 20)], { today });
+  if (down.cur.points !== 5 || down.prev.points !== 50 || down.dPct !== -90) fail('DOWN 数据 ' + down.cur.points + '/' + down.prev.points + '/' + down.dPct);
+  if (!/比上周少 90%/.test(down.verdict)) fail('DOWN verdict: ' + down.verdict);
+
+  /* 持平（±15% 内） */
+  const flat = X.weekCompare([mk(0, 'reps', 20), mk(8, 'reps', 20)], { today });
+  if (flat.dPct !== 0 || !/基本持平/.test(flat.verdict)) fail('FLAT: ' + flat.dPct + ' / ' + flat.verdict);
+
+  /* 本周零、上周有 → 破零文案 */
+  const noStart = X.weekCompare([mk(8, 'reps', 20), mk(9, 'reps', 10)], { today });
+  if (noStart.cur.points !== 0 || noStart.prev.points !== 30 || !/这周还没开始/.test(noStart.verdict)) fail('CUREMPTY: ' + noStart.verdict);
+
+  /* sessions/days 口径：关卡计入节数但不因 points>0 就算活跃天（valid/3），且同天不重复计天 */
+  const same = X.weekCompare([mk(0, 'reps', 10), mk(0, 'reps', 8)], { today });   // 同一天两条
+  if (same.cur.sessions !== 2) fail('同天应计 2 节实际 ' + same.cur.sessions);
+  if (same.cur.days !== 1) fail('同天应只算 1 个活跃天实际 ' + same.cur.days);
+
+  /* 上周之前的记录不计入 */
+  const old = X.weekCompare([mk(15, 'reps', 50)], { today });                    // 15 天前→上上周
+  if (old.cur.points !== 0 || old.prev.points !== 0) fail('超出两周窗口不应计入');
+
+  console.log('[wow] 全部断言通过, up/down/flat/空/窗口 均 OK');
+}
+
 console.log('\n✅ 全部离线单测通过');

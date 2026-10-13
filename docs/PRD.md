@@ -113,6 +113,8 @@
 
 - ✅ **v2.2 已交付（成就徽章：把坚持变成能集、能晒的里程碑）**：① `computeAchievements(db, {today})` + `achStreaks(records, now)` 纯函数—9 枚徽章（first / collector(5) / explorer(全部 13) / streak7 / streak30 / points(1000) / circuit / gamer / posture）全部数据驱动，返回逐枚 `{cur,target,pct,earned}` 与总览 `{earned,total}`，渲染层只画 DOM；② **口径不另起炉灶**：训练点走已有的 `recPoints`（与目标环/热力图一套），“不同动作”只数 EXERCISES 真 id（game-/circuit 哨兵值不计），“连续打卡”cur 今天未练从昨天起算、同时算 longest；explorer 描述用 `EXERCISES.length` 动态生成，动作库增减不会写死文案；③ 解锁/未解锁在 UI 上分亮色与灰化两态，未解锁也给真实进度条（封顶显示 Math.min(cur,target)）与 hover 释义；④ 单测覆盖空数据 total=9/全未解锁、混合数据四路口径与 streak cur/longest、explorer 动态描述与全解锁、pct/cur 不越界；浏览器冒烟注入 7 天连续训练 + 关卡 + 循环 + 体态记录，逐张比对 DOM 的 `.earned` 类与 `computeAchievements` 纯函数完全一致（点亮 6/9，sum 文案一致，0 偏差）。
 
+- ✅ **v2.3 已交付（周环比小结：把“这周比上周进还是退”一句话讲清）**：① `weekCompare(records, {today})` 纯函数—按周一起算分本周/上周两个窗口，用 `recPoints` 口径累加训练点（同时统计 sessions / 去重活跃 days），返回 `{cur,prev,dPoints,dPct,verdict}`；② **结论分五种文案**：两周都空→鼓动开始、上周空→“好开头”、本周空→“先练一组破零”、±15% 内→“基本持平”、≥+15%→绿字“多 X%”、≤-15%→橙字“少 X%…安排一次循环跟练”；③ **口径不另起炉灶**（继续复用 recPoints，与目标环/热力图/成就一套），超出两周窗口的老记录不计入；④ 渲染只在“本周训练”柱状图下方写一行 `#wow-txt`，按 dPoints 正/负加 up(绿)/down(橙) 色类；⑤ 单测覆盖 up/down/flat/空/本周零/同天不重复计天/两周窗口边界共7 组；浏览器冒烟注入“本周50/上周10”与“本周0/上周30”两组数据，逐字比对 DOM 文案与 `DJX.weekCompare` 完全一致、up/down 两态色类正确、0 console error。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；

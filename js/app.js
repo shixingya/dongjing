@@ -1572,6 +1572,9 @@
     const max = Math.max(1, ...bars.map(b => b.n));
     $('#week-bars').innerHTML = bars.map(b =>
       '<div class="wbar' + (b.n ? '' : ' zero') + '"><b>' + (b.n || '') + '</b><i style="height:' + (b.n / max * 100) + '%"></i><span>' + b.label + '</span></div>').join('');
+    const wow = X.weekCompare(DB.records, { today: Date.now() });
+    const wt = $('#wow-txt');
+    if (wt) { wt.textContent = '本周 ' + wow.cur.points + ' 点 · 上周 ' + wow.prev.points + ' 点 — ' + wow.verdict; wt.className = 'wow ' + (wow.dPoints > 0 ? 'up' : wow.dPoints < 0 ? 'down' : ''); }
     const agg = {};
     DB.records.forEach(r => Object.entries(r.issues || {}).forEach(([k, v]) => agg[k] = (agg[k] || 0) + v));
     const top = Object.entries(agg).sort((a, b) => b[1] - a[1]).slice(0, 5);
