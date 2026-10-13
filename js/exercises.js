@@ -1,5 +1,5 @@
 /* 动镜 DongJing · 动作引擎（纯内联数据，file:// 可运行，无 fetch）
- * 输出 window.DJX：关键点索引、几何工具、问题字典、十个动作 tracker、体态评估（正面/侧面/合并）。
+ * 输出 window.DJX：关键点索引、几何工具、问题字典、十三个动作 tracker、26 条纠错规则、体态评估（正面/侧面/合并）。
  * 约定：tracker.feed(l, tMs, dt) 中 l 为像素坐标 33 点数组 [{x,y,v}]。
  * 返回 {phase, live:[issueKey], rep:null|{valid, issues:[], seconds?}}
  */
@@ -57,7 +57,14 @@
     hsSmall:   { msg: '摇头幅度再大一点', severe: false },
     sgLow:     { msg: '肩膀往耳朵方向耸得更高', severe: false },
     grFind:    { msg: '把手举进画面（胸前到头顶之间）', severe: false },
-    grHalf:    { msg: '手指要完全张开', severe: false }
+    grHalf:    { msg: '手指要完全张开', severe: false },
+    srUp:      { msg: '把手举到与肩同高', severe: false },
+    srBent:    { msg: '手肘弯太多，手臂尽量伸直，本次不计', severe: true },
+    ssTry:     { msg: '双手贴裤缝，往侧面慢慢弯下去', severe: false },
+    ssSmall:   { msg: '侧弯幅度不够（至少 15°），本次不计', severe: true },
+    ssHold:    { msg: '侧弯后要停 1 秒再回正，本次不计', severe: true },
+    wsUp:      { msg: '再蹲低一点，大腿接近平放', severe: false },
+    wsLean:    { msg: '背往墙上靠，胸别往前塌', severe: false }
   };
 
   /* ================= trackers ================= */
@@ -328,6 +335,7 @@
     [13, 17], [17, 18], [18, 19], [19, 20], [0, 17]];
   function graspTracker() {
     const hist = {};  // label -> {open, fist}
+    const pend = [];  // 两只手常在同一帧完成一个周期，而一次只能上报一个 rep：排队而不是丢计数
     const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
     return {
       feed(l, t, dt, hands) {
@@ -341,12 +349,13 @@
           if (meanT > 1.7) s.open = true;                       // 完全张开
           else if (meanT < 1.15) { if (s.open) s.fist = true; } // 握拳
           if (s.open && s.fist && meanT > 1.7) {                // 张→握→张 = 1 次
-            rep = { valid: true, issues: [] };
+            pend.push({ valid: true, issues: [] });
             s.open = false; s.fist = false;
           }
           s.t = (s.t || 0) + dt;                                // 手离景过久重置周期
           if (s.t > 1200 && !s.open && !s.fist) s.t = 0;
         });
+        rep = pend.length ? pend.shift() : null;
         if (rep === null && hands.length === 1) live.push('grFind');
         return { phase: '张开 → 握拳 → 张开', live, rep };
       }
@@ -375,6 +384,92 @@
           rep = { valid: true, issues: [] };
         }
         return { phase: up ? '保持一下…放松回落' : '耸肩 → 放松', live, rep };
+      }
+    };
+  }
+
+  /* 侧平举（v1.8）：每只手各自「垂体侧 → 抬到肩高 → 回落」= 1 次；抬的过程中肘关节弯太厉害则不计。
+   * 尺度用肩宽不用躯干高，因为这是个坐姿也能练的动作（髋可能根本不入镜）。 */
+  function sidRaiseTracker() {
+    const L = LAND;
+    const SIDE = [['L', L.L_SHO, L.L_ELB, L.L_WRI], ['R', L.R_SHO, L.R_ELB, L.R_WRI]];
+    const st = { L: 'down', R: 'down' }, minElb = { L: 180, R: 180 };
+    const pend = [];      // 双臂同时上下是侧平举的常规做法：同一帧出的两个 rep 排队上报，不丢数
+    let hintAt = 0;
+    return {
+      feed(l, t) {
+        const sw = Math.max(30, Math.abs(l[L.L_SHO].x - l[L.R_SHO].x));
+        const live = [];
+        for (const [k, si, ei, wi] of SIDE) {
+          if (!vis(l, si) || !vis(l, wi)) { st[k] = 'down'; continue; }
+          const sh = l[si], wr = l[wi], el = vis(l, ei) ? l[ei] : null;
+          const raised = wr.y <= sh.y + 0.25 * sw;        // 手到肩线（允许略低）
+          const down = wr.y >= sh.y + 1.15 * sw;          // 自然垂回体侧
+          if (st[k] === 'down') {
+            if (raised) { st[k] = 'up'; minElb[k] = el ? ang(sh, el, wr) : 180; }
+          } else {
+            if (el) minElb[k] = Math.min(minElb[k], ang(sh, el, wr));
+            if (down) {
+              st[k] = 'down';
+              const straight = minElb[k] >= 135;           // 上举全程手臂基本伸直
+              pend.push({ valid: straight, issues: straight ? [] : ['srBent'] });
+            }
+          }
+        }
+        if (t - hintAt > 6000 && st.L === 'down' && st.R === 'down') { live.push('srUp'); hintAt = t; }
+        return { phase: (st.L === 'up' || st.R === 'up') ? '举到肩高，慢点放下来' : '双臂垂在体侧，拿两瓶水',
+          live, rep: pend.length ? pend.shift() : null };
+      }
+    };
+  }
+
+  /* 体侧伸展（v1.8）：肩髋连线偏离竖直 ≥ 14° 并停住 ≥ 0.6s → 回正 = 1 次。
+   * 只算幅度不算时间的话，用户会“刷”两下就计一次，对这个拉伸动作没意义。 */
+  function sideStretchTracker() {
+    const L = LAND;
+    let side = '', maxAng = 0, holdMs = 0, hintAt = 0;
+    return {
+      feed(l, t, dt) {
+        const ok = vis(l, L.L_SHO) && vis(l, L.R_SHO) && vis(l, L.L_HIP) && vis(l, L.R_HIP);
+        const sMid = mid(l[L.L_SHO], l[L.R_SHO]), hMid = mid(l[L.L_HIP], l[L.R_HIP]);
+        const lean = ok ? Math.atan2(sMid.x - hMid.x, Math.max(1, hMid.y - sMid.y)) * 180 / Math.PI : 0;
+        const live = [];
+        let rep = null;
+        if (!side) {
+          if (ok && Math.abs(lean) >= 14) { side = lean > 0 ? 'R' : 'L'; maxAng = Math.abs(lean); holdMs = 0; }
+          else if (t - hintAt > 6000) { live.push('ssTry'); hintAt = t; }   // 一直直挺挺地站着 → 提醒
+        } else {
+          maxAng = Math.max(maxAng, Math.abs(lean));
+          if (Math.abs(lean) >= 12) holdMs += (dt || 0);
+          if (Math.abs(lean) < 6) {                       // 回正 → 结算
+            const ampOK = maxAng >= 14, pass = ampOK && holdMs >= 600;
+            rep = { valid: pass, issues: pass ? [] : (ampOK ? ['ssHold'] : ['ssSmall']) };
+            side = ''; maxAng = 0; holdMs = 0;
+          }
+        }
+        return { phase: side ? (side === 'R' ? '向右侧弯，停一秒…' : '向左侧弯，停一秒…') : '站直，双手贴裤缝', live: uniq(live), rep };
+      }
+    };
+  }
+
+  /* 靠墙静蹲（v1.8）：膝角 80–118° 且躯干不后仰时累计计时，其他情况暂停（同平板支撑的 time 口径） */
+  function wallSitTracker() {
+    const L = LAND;
+    return {
+      feed(l, t, dt) {
+        const hl = l[L.L_HIP], hr = l[L.R_HIP], sMid = mid(l[L.L_SHO], l[L.R_SHO]);
+        const kneeL = ang(hl, l[L.L_KNEE], l[L.L_AN]), kneeR = ang(hr, l[L.R_KNEE], l[L.R_AN]);
+        const legsOn = (vis(l, L.L_AN) ? 1 : 0) + (vis(l, L.R_AN) ? 1 : 0) + (vis(l, L.L_KNEE) ? 1 : 0) + (vis(l, L.R_KNEE) ? 1 : 0);
+        const deep = Math.min(vis(l, L.L_AN) ? kneeL : 180, vis(l, L.R_AN) ? kneeR : 180);
+        const holding = legsOn >= 3 && deep >= 75 && deep <= 118;
+        const leanOff = Math.abs(sMid.x - mid(hl, hr).x) / torsoH(l);
+        const upright = leanOff <= 0.22;
+        const live = [];
+        if (legsOn >= 3 && !holding && deep > 118) live.push('wsUp');
+        if (holding && !upright) live.push('wsLean');
+        const sec = dt ? dt / 1000 : 0;
+        return { phase: holding ? (upright ? '静蹲保持中' : '背往墙上靠…') : '下蹲到大腿接近平放',
+          live, rep: holding ? { valid: upright, seconds: sec, issues: upright ? [] : ['wsLean'] } : null };
       }
     };
   }
@@ -478,6 +573,36 @@
         const elb = ang(pickSide(l, 13, 14), pickSide(l, 11, 12), pickSide(l, 15, 16));
         return elb > 55;
       }
+    },
+    {
+      id: 'sidraise', name: '侧平举', ico: '🤲', view: 'front', seated: true, free: false, diff: 2,
+      mode: 'reps', target: 12, sets: 3, met: 3.5,
+      desc: '三角肌塑形，拿两瓶水就能练（Pro）',
+      setup: '正面约 2 米，头到腰入镜即可，坐着也能做；双手举起后不要超出画面上沿。',
+      tips: ['双臂自然垂在体侧起手', '手抬到与肩同高就好，不必举过头', '手臂尽量伸直，别用手肘借力', '下放要慢，不靠惯性甩'],
+      keys: [11, 12, 13, 14, 15, 16],
+      start: l => {
+        const sw = Math.max(30, Math.abs(l[11].x - l[12].x));
+        return l[15].y > l[11].y + 1.0 * sw && l[16].y > l[12].y + 1.0 * sw;
+      }
+    },
+    {
+      id: 'sidestretch', name: '体侧伸展', ico: '🌗', view: 'front', free: true, diff: 1,
+      mode: 'reps', target: 10, sets: 2, met: 2.0,
+      desc: '拉开腰侧链，久坐腰酸的解药',
+      setup: '摄像头正前方约 2 米，至少拍到肩到髋部；双手自然下垂。',
+      tips: ['双手贴裤缝，只往侧面弯', '侧弯到极限停 1 秒', '左右交替，各算 1 次', '身体不要往前倾或转体'],
+      keys: [11, 12, 23, 24],
+      start: l => Math.abs(mid(l[11], l[12]).x - mid(l[23], l[24]).x) < 0.08 * torsoH(l)
+    },
+    {
+      id: 'wallsit', name: '靠墙静蹲', ico: '🧱', view: 'front', free: false, diff: 2,
+      mode: 'time', target: 30, sets: 3, met: 3.0,
+      desc: '对膝盖友好的下肢等长力量，背靠墙就行（Pro）',
+      setup: '背靠墙站好，摄像头在正前方 2–3 米，头顶到脚踝全部入镜。',
+      tips: ['下蹲到膝盖约 90°，大腿接近平放', '膝不要超过脚尖', '背贴墙，胸不要往前塌', '姿势垮了计时会自动暂停'],
+      keys: [11, 12, 23, 24, 25, 26, 27, 28],
+      start: l => Math.min(ang(l[23], l[25], l[27]), ang(l[24], l[26], l[28])) < 130
     }
   ];
 
@@ -589,13 +714,15 @@
   /* ================= 一句话编排（AI 计划）=================
    * 纯函数：自然语言 → 循环跟练动作序列。不依赖任何 DOM，便于 Node 单测。
    * 思路：关键词命中场景/部位标签 → 标签对应动作候选池 → 按时长决定动作个数。 */
+  const OFFICE_POOL = ['headshake', 'wave', 'shrug', 'sidestretch'];   // 空间受限首选（体侧伸展只要求肩髋可见，贴着桌子也能做）
   const PLAN_TAG = [
-    { re: /(办公室|久坐|久站|上班|工位|中午|午休|出差|酒店|空间小|没地方|椅子|坐着)/, pool: ['headshake', 'wave', 'shrug'], why: '场地有限：以坐姿上肢动作为主', seat: true },
-    { re: /(肩颈|脖子|颈椎|肩膀|酸痛|僵硬|放松|舒缓|拉伸)/, pool: ['shrug', 'headshake', 'wave'], why: '肩颈发紧：耸肩 + 摇头放松优先' },
-    { re: /(腿|臀|下肢|膝|深蹲|弓步|跑)/, pool: ['squat', 'lunge', 'highknees'], why: '下肢塑形：深蹲与弓步蹲' },
+    { re: /(办公室|久坐|久站|上班|工位|中午|午休|出差|酒店|空间小|没地方|椅子|坐着)/, pool: OFFICE_POOL, why: '场地有限：以坐姿上肢与侧链伸展为主', seat: true },
+    { re: /(肩颈|脖子|颈椎|肩膀|酸痛|僵硬|放松|舒缓)/, pool: ['shrug', 'headshake', 'wave'], why: '肩颈发紧：耸肩 + 摇头放松优先' },
+    { re: /(拉伸|柔韧|舒展|松开|弯腰|侧腰|腰紧|筋)/, pool: ['sidestretch', 'shrug', 'headshake'], why: '拉伸放松：体侧伸展 + 肩颈活动度' },
+    { re: /(腿|臀|下肢|膝|蹲|弓步|跑|靠墙)/, pool: ['squat', 'lunge', 'highknees', 'wallsit'], why: '下肢力量：深蹲、弓步与靠墙静蹲' },
     { re: /(减脂|燃脂|汗|心肺|体能|体力|烈|累|瘦)/, pool: ['jack', 'highknees', 'squat'], why: '拉心率燃脂：开合跳 + 高抬腿' },
     { re: /(腹|核心|腰|平板|支撑|背)/, pool: ['plank', 'pushup', 'squat'], why: '核心稳定：平板支撑' },
-    { re: /(胸|臂|上肢|手|撑|俯卧撑)/, pool: ['pushup', 'wave', 'shrug'], why: '上肢力量：俯卧撑与挥臂' },
+    { re: /(胸|臂|上肢|手|撑|俯卧撑|肩|肩胛)/, pool: ['pushup', 'wave', 'shrug', 'sidraise'], why: '上肢力量：俯卧撑与侧平举' },
     { re: /(睡前|晚上|晚间|睡不着|安神)/, pool: ['headshake', 'shrug', 'wave'], why: '睡前低强度：只做活动度不做冲击', easy: true }
   ];
   const PLAN_BALANCE = ['squat', 'jack', 'headshake', 'plank'];   // 没命中关键词时的均衡套餐
@@ -633,8 +760,25 @@
     const seatOnly = hits.some(t => t.seat) && pool.filter(seated).length >= 2;
     if (seatOnly) {
       const keep = pool.filter(seated);
-      PLAN_TAG[0].pool.forEach(id => { if (ok(id) && !keep.includes(id)) keep.push(id); });
+      OFFICE_POOL.forEach(id => { if (ok(id) && !keep.includes(id)) keep.push(id); });
       pool = keep;
+    }
+
+    /* 膝盖敏感：不能一听“腿”就排跳跃与高频抬腿——冲击类移出，等长负荷的靠墙静蹲顶到最前（v1.8）。
+     * 不这样处理会出现“用户说膝盖不行，结果第一个动作是深蹲”的自相矛盾编排 */
+    const kneeWorry = /膝.{0,6}(不行|不太行|痛|疼|伤|弱|敏感|不适|怕)|护膝|怕伤膝/.test(s);
+    if (kneeWorry) {
+      const IMPACT = { jack: 3, highknees: 3, squat: 2, lunge: 2, wallsit: 0 };
+      const rank = id => IMPACT[id] != null ? IMPACT[id] : 1;
+      pool = pool.filter(id => rank(id) < 3);
+      if (ok('wallsit') && !pool.includes('wallsit')) pool.unshift('wallsit');
+      /* 免费版靠墙静蹲被锁，筛完可能只剩一个动作：用活度类兼住，不能排出单人套餐 */
+      if (pool.length < 2) ['sidestretch', 'headshake', 'wave', 'shrug'].forEach(id => { if (ok(id) && !pool.includes(id)) pool.push(id); });
+      pool = pool.slice().sort((a, b) => rank(a) - rank(b));
+      // 不能承诺一个免费版根本排不进去的动作：靠墙静蹲被锁时改说“不磨膝的活度与等长动作”
+      why.unshift(ok('wallsit')
+        ? '膝盖敏感：避开跳跃与快频抬腿，优先靠墙静蹲这类不磨膝的等长负荷'
+        : '膝盖敏感：避开跳跃与快频抬腿，以不磨膝的活动度与低冲击动作为主');
     }
 
     /* 一轮里放几个动作：按时长算（每动作一轮 ≈ 40–100s），睡前低强度不拉长 */
@@ -663,11 +807,11 @@
    * 约束全部来自真实产品逻辑：Pro 动作只有订阅者能排、免费额度排完就自动改成
    * 不扣额度的体感关卡、周日固定休息。不用随机数，所以可测、可复现。 */
   const WEEK_PLAN = [
-    { name: '下肢力量', pool: ['squat', 'lunge', 'highknees', 'jack'], game: 'guard', why: '大肌群先练，代谢收益最高' },
+    { name: '下肢力量', pool: ['squat', 'lunge', 'highknees', 'jack', 'wallsit'], game: 'guard', why: '大肌群先练，代谢收益最高' },
     { name: '肩颈放松', pool: ['shrug', 'headshake', 'wave'], game: null, why: '久坐一天的头肩颈，只要活动度不要力竭' },
     { name: '心肺燃脂', pool: ['jack', 'highknees', 'squat', 'wave'], game: 'dodge', why: '拉心率的一天，动作节奏要快' },
     { name: '核心稳定', pool: ['plank', 'pushup', 'squat', 'shrug'], game: null, why: '躯干稳了体态评分才会涨' },
-    { name: '久坐激活', pool: ['headshake', 'wave', 'shrug', 'grasp'], game: null, why: '办公室随时能做，不需要场地' },
+    { name: '久坐激活', pool: ['headshake', 'wave', 'shrug', 'sidestretch', 'sidraise', 'grasp'], game: null, why: '办公室随时能做，不需要场地' },
     { name: '体感关卡', pool: [], game: 'collect', why: '玩着把幅度拉开，而且不占训练额度' },
     { name: '休息日', pool: [], game: null, why: '肌肉在休息时才长，别硬撑' }
   ];
@@ -716,10 +860,17 @@
       const recs = bucket[i];
       const donePts = recs.reduce((a, r) => a + ptsOf(r), 0);
       let note = '';
-      /* 动作选择：可用的 + 弱项优先，最多 3 个；不够 2 个就从免费补位池凑 */
+      /* 动作选择：可用的 + 弱项优先，最多 3 个；不够 2 个就从免费补位池凑。
+       * 先按周轮换起点再按评分排：评分低者仍然优先（弱项硬约束），但没历史时大家同分，
+       * 若不轮换就永远是池首那几个老动作霸位、新加的动作一辈子排不进来。周序号单调递增，同周内确定可复现 */
       let ids = [];
       if (kind === 'train') {
-        ids = th.pool.filter(avail).sort((a, b) => scoreOf(a) - scoreOf(b)).slice(0, 3);
+        const pool = th.pool.filter(avail);
+        if (pool.length) {
+          const wk = Math.floor(monday / 6048e5);
+          const rot = pool.map((_, k) => pool[(wk + k) % pool.length]);
+          ids = rot.sort((a, b) => scoreOf(a) - scoreOf(b)).slice(0, 3);
+        }
         if (ids.length < 2) WEEK_FILL.forEach(id => { if (ids.length < 3 && avail(id) && !ids.includes(id)) ids.push(id); });
       }
       /* 一个训练日 = 1 次循环跟练 = 1 次额度；免费额度排完自动降级成关卡日 */
@@ -860,6 +1011,7 @@
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,
+               sidraise: sidRaiseTracker, sidestretch: sideStretchTracker, wallsit: wallSitTracker,
                headshake: headshakeTracker, wave: waveTracker, grasp: graspTracker,
                shrug: shrugTracker }[id]();
     }

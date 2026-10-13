@@ -142,11 +142,12 @@ function mkHand(tipDist) {
 
 /* --- 一句话编排 planFromText（纯函数）：场景识别 / 时长 / Pro 过滤 --- */
 {
-  const seatedSet = ['headshake', 'wave', 'shrug'];
+  const seatedSet = ['headshake', 'wave', 'shrug', 'sidestretch'];   // 办公室场景允许项（体侧伸展只要求肩髋可见）
+  const needSpace = ['squat', 'lunge', 'jack', 'highknees', 'pushup', 'plank', 'wallsit'];   // 要腾地方/全身入镜的
   const p1 = X.planFromText('我在办公室久坐，肩膀很酸，来个 5 分钟');
   const allSeated = p1.ids.every(id => seatedSet.includes(id));
-  console.log('[编排-办公室] ids =', p1.ids.join(','), '全坐姿 =', allSeated, '时长 =', p1.minutes, '预计 =', p1.estMin);
-  if (!allSeated || !p1.seatedOnly || p1.minutes !== 5 || p1.ids.length < 3) process.exit(1);
+  console.log('[编排-办公室] ids =', p1.ids.join(','), '不占地方 =', allSeated, '时长 =', p1.minutes, '预计 =', p1.estMin);
+  if (!allSeated || p1.ids.some(id => needSpace.includes(id)) || !p1.seatedOnly || p1.minutes !== 5 || p1.ids.length < 3) process.exit(1);
 
   const p2 = X.planFromText('想瘦腿出汗 10 分钟');
   console.log('[编排-腿燃脂] ids =', p2.ids.join(','), '含深蹲 =', p2.ids.includes('squat'), '预计 =', p2.estMin);
@@ -163,6 +164,35 @@ function mkHand(tipDist) {
   const p5 = X.planFromText('');
   console.log('[编排-空输入] ids =', p5.ids.join(','), 'why =', p5.why[0]);
   if (p5.ids.length < 3 || !/均衡/.test(p5.why[0])) process.exit(1);
+
+  /* v1.8 新增动作得“说人话就能命中”，不能只活在动作库里 */
+  const p6 = X.planFromText('坐一天侧腰好紧，想拉伸一下');
+  console.log('[编排-拉伸] ids =', p6.ids.join(','), 'why =', p6.why.join(' / '));
+  if (!p6.ids.includes('sidestretch') || p6.ids[0] !== 'sidestretch') { console.log('拉伸诉求应把体侧伸展排第'); process.exit(1); }
+  const p7 = X.planFromText('膝盖不太行，就想靠墙蹲一会', { pro: true });
+  console.log('[编排-靠墙蹲 Pro] ids =', p7.ids.join(','));
+  if (!p7.ids.includes('wallsit')) { console.log('靠墙/蹲应命中靠墙静蹲'); process.exit(1); }
+  const p8 = X.planFromText('练手臂', { pro: true });
+  console.log('[编排-手臂 Pro] ids =', p8.ids.join(','));
+  if (!p8.ids.includes('sidraise')) { console.log('练手臂应含侧平举'); process.exit(1); }
+
+  /* 膝盖敏感：不能一听“腿”就排跳跃，等长的靠墙静蹲得排第（浏览器冒烟实测到这一步之前是自相矛盾的）*/
+  const p9 = X.planFromText('膝盖不太行，就想靠墙蹲一会', { pro: true });
+  console.log('[编排-护膝 Pro] ids =', p9.ids.join(','), 'why =', p9.why[0]);
+  if (p9.ids[0] !== 'wallsit' || p9.ids.includes('jack') || p9.ids.includes('highknees')) {
+    console.log('膝盖敏感不应安排冲击类，且靠墙静蹲应排第'); process.exit(1);
+  }
+  if (!/膝盖敏感/.test(p9.why[0])) { console.log('why 应说明护膝理由'); process.exit(1); }
+  const p10 = X.planFromText('膝盖不太行');                       // 免费版：靠墙静蹲被锁，不能退化成单动作
+  console.log('[编排-护膝免费] ids =', p10.ids.join(','), 'locked =', p10.locked.join('/'));
+  if (p10.ids.length < 3 || p10.ids.includes('highknees') || !p10.locked.includes('靠墙静蹲')) {
+    console.log('免费版护膝编排也该凑满 3 个，并告知靠墙静蹲需 Pro'); process.exit(1);
+  }
+  /* 不能承诺免费版根本排不进去的动作 */
+  console.log('[编排-护膝免费] why =', p10.why[0]);
+  if (/优先靠墙静蹲/.test(p10.why[0]) || !/低冲击/.test(p10.why[0])) { console.log('无 wallsit 权限时 why 不应承诺靠墙静蹲'); process.exit(1); }
+  const p11 = X.planFromText('想瘦腿出汗', { pro: true });   // 没提膝盖就不能误伤：冲击类照旧
+  if (!p11.ids.length || p11.why.some(w => /膝盖敏感/.test(w))) { console.log('未提膝盖时不应触发护膝逻辑'); process.exit(1); }
 }
 
 /* --- 体感关卡：三种关卡的判定与生命周期 --- */
@@ -253,6 +283,32 @@ function mkHand(tipDist) {
   if (ci.indexOf('squat') < 0 || ci.indexOf('squat') > ci.indexOf('jack')) { console.log('弱项应优先'); process.exit(1); }
   if (!weak.weak.length || !/深蹲/.test(weak.weak[0])) { console.log('weak 应报深蹲', weak.weak); process.exit(1); }
 
+  /* v1.8 按周轮换：新动作不能永远排在池尾进不了课表 */
+  {
+    const seen = new Set(), firsts = [];
+    for (let w = 0; w < 5; w++) {
+      const mon = new Date(2026, 9, 12 + w * 7, 12, 0, 0).getTime();
+      const pp = X.makeWeekPlan([], { today: mon, pro: true });
+      pp.days.forEach(d => (d.ids || []).forEach(id => seen.add(id)));
+      firsts.push(pp.days[0].ids.join(','));
+    }
+    console.log('[课表-轮换] 5 周出现动作 =', [...seen].sort().join(','));
+    console.log('           下肢日序列 =', firsts.join(' | '));
+    ['wallsit', 'sidraise', 'sidestretch'].forEach(id => {
+      if (!seen.has(id)) { console.log('新动作从来没被排进课表', id); process.exit(1); }
+    });
+    if (new Set(firsts).size < 3) { console.log('跨周应换口味，不能五周一张课表'); process.exit(1); }
+    /* 轮换不能破弱项优先：深蹲分再低也得排第（记录必须落在该周的近 14 天窗口内）*/
+    const recW = (mon, id, score) => ({ ts: mon + 36e5, ex: id, name: id,
+      mode: 'reps', target: 10, valid: 10, attempts: 11, secs: 60, score, issues: {} });
+    for (let w = 0; w < 4; w++) {
+      const mon = new Date(2026, 9, 12 + w * 7, 12, 0, 0).getTime();
+      const wp = X.makeWeekPlan([recW(mon, 'squat', 42), recW(mon, 'jack', 95), recW(mon, 'lunge', 93), recW(mon, 'wallsit', 96)], { today: mon, pro: true });
+      if (wp.days[0].ids[0] !== 'squat') { console.log('弱项应优先于轮换', w, wp.days[0].ids.join(',')); process.exit(1); }
+    }
+    console.log('           弱项优先在 4 个轮换周均成立 = true');
+  }
+
   /* 额度排完自动降级为关卡日（关卡不扣额度） */
   const q = X.makeWeekPlan([], { today: WED, quotaLeft: 2 });
   const down = q.days.filter(d => d.note);
@@ -341,11 +397,135 @@ function mkHand(tipDist) {
   if (X.mergePosture(null, null) !== null) process.exit(1);
 }
 
-/* --- 元数据完整性：10 动作、keys/start 均存在，坐姿系标记 --- */
+/* --- 侧平举（v1.8）：双臂同起同落不能亏数；弯臂版本不计 --- */
+{
+  const frame = (wrY, elX, elY, wX) => {
+    const l = mkL();
+    l[11] = { x: 300, y: 300, v: 1 }; l[12] = { x: 400, y: 300, v: 1 };   // sw = 100
+    l[13] = { x: elX, y: elY, v: 1 }; l[15] = { x: wX == null ? 292 : wX, y: wrY, v: 1 };
+    l[14] = { x: 700 - elX, y: elY, v: 1 }; l[16] = { x: 700 - (wX == null ? 292 : wX), y: wrY, v: 1 };
+    return l;
+  };
+  const down = () => frame(520, 296, 410);          // 垂体侧（腕 y 520 ≥ 300+1.15*100）
+  const upStraight = () => frame(300, 296, 300);    // 抬到肩线（300 ≤ 300+0.25*100），肘角≈180
+  const upBent = () => frame(300, 300, 400, 340);   // 小臂往上掀：肘角≈ 22°
+  const run = (seq) => {
+    const t = X.makeTracker('sidraise');
+    let reps = 0, valid = 0, iss = [];
+    seq.forEach((f, i) => {
+      const r = t.feed(f(), 1000 + i * 250, 250);
+      if (r.rep) { reps++; if (r.rep.valid) valid++; iss = iss.concat(r.rep.issues); }
+    });
+    return { reps, valid, iss };
+  };
+  const ok = run([down, down, upStraight, upStraight, down, down, down]);
+  console.log('[侧平举-标准] reps =', ok.reps, 'valid =', ok.valid);
+  if (ok.reps !== 2 || ok.valid !== 2) { console.log('双臂一轮应计 2 次'); process.exit(1); }
+  const bad = run([down, down, upBent, upBent, down, down, down]);
+  console.log('[侧平举-弯臂] reps =', bad.reps, 'valid =', bad.valid, 'issues =', bad.iss.join(','));
+  if (bad.reps !== 2 || bad.valid !== 0 || !bad.iss.includes('srBent')) { console.log('弯臂应不计次'); process.exit(1); }
+}
+
+/* --- 体侧伸展（v1.8）：幅度 + 停留都达标才算，回正才结算 --- */
+{
+  const lean = deg => {
+    const l = mkL();
+    const hMidX = 350, dy = 200, dx = Math.tan(deg * Math.PI / 180) * dy;
+    l[23] = { x: hMidX - 10, y: 500, v: 1 }; l[24] = { x: hMidX + 10, y: 500, v: 1 };
+    l[11] = { x: hMidX + dx - 50, y: 300, v: 1 }; l[12] = { x: hMidX + dx + 50, y: 300, v: 1 };
+    l[0] = { x: hMidX + dx, y: 200, v: 1 };
+    return l;
+  };
+  const up = () => lean(0);
+  const run = (seq) => {
+    const t = X.makeTracker('sidestretch');
+    let reps = 0, res = [];
+    seq.forEach((f, i) => { const r = t.feed(f(), 1000 + i * 250, 250); if (r.rep) { reps++; res.push(r.rep.valid + ':' + r.rep.issues.join('/')); } });
+    return { reps, res };
+  };
+  const good = run([up, () => lean(20), () => lean(21), () => lean(20), () => lean(20), () => lean(20), up]);
+  console.log('[体侧伸展-达标] reps =', good.reps, good.res.join(' | '));
+  if (good.reps !== 1 || good.res[0] !== 'true:') { console.log('侧弯 20° 停 1s 应计 1 次有效'); process.exit(1); }
+  const rush = run([up, () => lean(20), () => lean(20), () => lean(20), up]);
+  console.log('[体侧伸展-未停留] reps =', rush.reps, rush.res.join(' | '));
+  if (rush.reps !== 1 || rush.res[0] !== 'false:ssHold') { console.log('停不够 0.6s 应判 ssHold'); process.exit(1); }
+  const small = run([up, () => lean(8), () => lean(8), () => lean(8), up]);
+  console.log('[体侧伸展-幅度不足] reps =', small.reps);
+  if (small.reps !== 0) { console.log('8° 不该进入侧弯周期'); process.exit(1); }
+}
+
+/* --- 靠墙静蹲（v1.8）：膝角 80–118° 且躯干不后仰才累计计时 --- */
+{
+  const pose = (kneeDeg, leanOff) => {
+    const l = mkL();
+    const ky = 560, kx = 400, shin = 120;
+    const th = 120, dy = Math.cos(kneeDeg * Math.PI / 180) * th, dx = Math.sqrt(th * th - dy * dy);
+    l[23] = { x: kx - dx - 10, y: ky + dy, v: 1 }; l[24] = { x: kx - dx + 12, y: ky + dy, v: 1 };
+    l[25] = { x: kx, y: ky, v: 1 }; l[26] = { x: kx + 12, y: ky, v: 1 };
+    l[27] = { x: kx, y: ky + shin, v: 1 }; l[28] = { x: kx + 12, y: ky + shin, v: 1 };
+    const hipMidX = kx - dx + 1, hipMidY = ky + dy;
+    const off = (leanOff || 0) * 140;
+    l[11] = { x: hipMidX - 50 + off, y: hipMidY - 140, v: 1 }; l[12] = { x: hipMidX + 50 + off, y: hipMidY - 140, v: 1 };
+    l[0] = { x: hipMidX + off, y: hipMidY - 220, v: 1 };
+    return l;
+  };
+  const run = (mk, n) => {
+    const t = X.makeTracker('wallsit');
+    let secs = 0, valid = 0, invalid = 0, live = [];
+    for (let i = 0; i < n; i++) {
+      const r = t.feed(mk(), 1000 + i * 250, 250);
+      live = live.concat(r.live);
+      if (r.rep) { secs += r.rep.seconds; if (r.rep.valid) valid++; else invalid++; }
+    }
+    return { secs: +secs.toFixed(2), valid, invalid, live };
+  };
+  const hold = run(() => pose(100), 40);
+  console.log('[静蹲-标准] secs =', hold.secs, 'valid帧 =', hold.valid);
+  if (Math.abs(hold.secs - 10) > 0.01 || hold.valid !== 40) { console.log('40×250ms 应累计 10s'); process.exit(1); }
+  const high = run(() => pose(150), 20);
+  console.log('[静蹲-没蹲下] secs =', high.secs, 'live =', high.live.join(','));
+  if (high.secs !== 0 || !high.live.includes('wsUp')) { console.log('站直不该计时且要提示蹲低'); process.exit(1); }
+  const slump = run(() => pose(100, 0.35), 20);
+  console.log('[静蹲-躯干前塌] secs =', slump.secs, 'valid帧 =', slump.valid, 'invalid帧 =', slump.invalid, 'live =', slump.live.join(','));
+  if (slump.valid !== 0 || slump.invalid !== 20 || !slump.live.includes('wsLean')) { console.log('后仰应暂停计时'); process.exit(1); }
+}
+
+/* --- 抓握：同一帧双手同时完成不能只计 1 次（一帧只能上报一个 rep，多余的排队） --- */
+{
+  const t = X.makeTracker('grasp');
+  const hands = dist => [0, 1].map(g => ({ label: g, lm: mkHand(dist) }));
+  const seq = [];
+  for (let c = 0; c < 2; c++) {                    // 每只手 2 个「张开→握拳→张开」周期
+    for (let i = 0; i < 3; i++) seq.push(220);
+    for (let i = 0; i < 3; i++) seq.push(95);
+    seq.push(220);                                 // 这一帧两只手同时结算
+  }
+  for (let i = 0; i < 4; i++) seq.push(220);       // 维持张开，把队列剩下的排空
+  let reps = 0, maxPerFrame = 0;
+  seq.forEach(d => {
+    const r = t.feed(mkL(), 0, 33, hands(d));
+    const n = r.rep ? 1 : 0;
+    maxPerFrame = Math.max(maxPerFrame, n);
+    reps += n;
+  });
+  console.log('[抓握-双手同帧] reps =', reps, '(期望 4：两只手各 2 次) 单帧最多上报 =', maxPerFrame);
+  if (reps !== 4 || maxPerFrame > 1) { console.log('双手同时完成时不应丢计数，也不应一帧塞两个'); process.exit(1); }
+}
+
+/* --- 元数据完整性：13 动作、keys/start 均存在，坐姿系标记 --- */
 {
   const ids = X.EXERCISES.map(e => e.id);
   console.log('[元数据] 动作数 =', ids.length, ids.join(','));
-  if (ids.length !== 10) process.exit(1);
+  if (ids.length !== 13) process.exit(1);
+  const freeN = X.EXERCISES.filter(e => e.free).length;
+  console.log('[元数据] 免费 =', freeN, '/ Pro =', ids.length - freeN, '/ 纠错规则 =', Object.keys(X.ISSUES).length);
+  if (freeN !== 7 || Object.keys(X.ISSUES).length !== 26) { console.log('免费/Pro 或规则口径变了，记得同步 README/PRD'); process.exit(1); }
+  ['sidraise', 'sidestretch', 'wallsit'].forEach(id => {
+    const e = X.EXERCISES.find(x => x.id === id);
+    if (!e || !e.keys.length || typeof e.start !== 'function' || typeof X.makeTracker(id).feed !== 'function') {
+      console.log('新动作接入不完整', id); process.exit(1);
+    }
+  });
   ['headshake', 'wave', 'grasp', 'shrug'].forEach(id => {
     const e = X.EXERCISES.find(x => x.id === id);
     if (!e.seated || typeof e.start !== 'function' || !e.keys.length) { console.log('元数据缺项', id); process.exit(1); }

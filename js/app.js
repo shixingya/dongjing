@@ -259,6 +259,14 @@
       put(25, .43, .69); put(26, .57, .69);
       put(27, .42, .86); put(28, .58, .86);
     }
+    /* v1.8 新动作的起始姿态覆盖：小人是“机位引导”的一部分，画错比不画更误导 */
+    const OVER = {
+      sidraise: [[13, .40, .41], [14, .60, .41], [15, .40, .53], [16, .60, .53]],        // 坐姿双臂直垂体侧（拿水瓶），不是手放膝上
+      sidestretch: [[13, .40, .39], [14, .60, .39], [15, .39, .51], [16, .61, .51]],      // 双手贴裤缝，躯干竖直
+      wallsit: [[23, .44, .60], [24, .56, .60], [25, .42, .62], [26, .58, .62],           // 屁股往下滑到大腿接近平放（正面看膝≈高）
+               [15, .43, .53], [16, .57, .53]]                                            // 手自然搭在大腿上
+    };
+    (OVER[(ex && ex.id) || ''] || []).forEach(o => put(o[0], o[1], o[2]));
     return P;
   }
   function drawGhost(canvas, tMs) {
@@ -451,6 +459,8 @@
     if (T.validTot > 0 || T.attempts > 0 || T.timeSec > 3) endTrain('saveShow');
     else { endTrain('discard'); go('home'); toast('已退出训练'); }
   };
+  /* 机位引导阶段的 ✕：#btn-quit 在尚未显示的 HUD 里，引导阶段看得见却点不到，不补一个入口就等于只能一路点下去 */
+  $('#btn-setup-quit').onclick = () => $('#btn-quit').click();
 
   function setStatus(txt, ok) {
     const s = $('#hud-person'); s.textContent = txt; s.className = 'hud-status' + (ok ? ' ok' : '');
@@ -701,7 +711,14 @@
     hsSmall: '摇头时眼看肩膀方向，幅度自然就大',
     sgLow: '吸气上提停 2 秒、呼气沉肩，把幅度拉开',
     grFind: '双手举到下巴前 20cm，先张开五指再握',
-    grHalf: '先做 5 次“用力张手 3 秒”再进入节奏'
+    grHalf: '先做 5 次“用力张手 3 秒”再进入节奏',
+    srUp: '先空手练 5 次“手到肩高”，找到位置再上重量',
+    srBent: '重量先减半，靠肩发力把手臂伸直，而不是弯手肘甩',
+    ssTry: '双手贴裤缝往下滑，眼睛平视，只往侧面倒',
+    ssSmall: '侧弯时手往膝盖方向滑，幅度自然就够',
+    ssHold: '侧弯到最低点心里数三下，再慢慢回正',
+    wsUp: '背靠墙往下滑，直到膝角接近 90°，大腿接近平放',
+    wsLean: '收下巴、肩胛贴墙，不要为了蹲低让胸往前塌'
   };
   /* 近 N 天所有动作的问题聚合（用于首页教练笔记） */
   function aggWeak(days) {
@@ -1514,7 +1531,7 @@
   function renderMe() {
     $('#me-plan').innerHTML = DB.pro ? '<span class="plan-badge pro">动镜 Pro ✦</span>' : '<span class="plan-badge free">免费版</span>';
     $('#me-quota').textContent = DB.pro ? '全部动作 · 不限训练次数'
-      : '本月已训练 ' + quotaUsed() + ' / ' + FREE_QUOTA + ' 次 · 基础 6 动作免费（含坐姿系）';
+      : '本月已训练 ' + quotaUsed() + ' / ' + FREE_QUOTA + ' 次 · 基础 7 动作免费（含坐姿系与体侧伸展）';
     $('#chk-demo-pro').checked = !!DB.pro;
     $('#inp-weight').value = DB.set.weight;
     $('#inp-goal').value = DB.set.dailyGoal;
@@ -1524,7 +1541,9 @@
     $('#chk-mirror').checked = DB.set.mirror;
   }
   function openPro(reason) {
-    $('#modal-pro').querySelector('p.muted').textContent = (reason || '') + ' 解锁全部动作 · 不限次数 · 手指级抓握识别 · 报表详情';
+    // 只说真的卡点：Pro 锁的是动作与次数；报表、体态评估、关卡都是全量免费，不能当成付费卖点
+    const PRO = X.EXERCISES.filter(e => !e.free);
+    $('#modal-pro').querySelector('p.muted').textContent = (reason || '') + ' 解锁 ' + PRO.length + ' 个 Pro 动作（' + PRO.map(e => e.name).join(' / ') + '）· 不限训练次数';
     $('#modal-pro').hidden = false;
   }
   $$('[data-close]').forEach(b => b.onclick = () => { const m = b.closest('.modal'); if (m) m.hidden = true; });

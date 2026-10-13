@@ -98,6 +98,7 @@ h3{font-size:18px}
 .mask-ico{font-size:44px; margin-bottom:8px}
 .setup-hint{font-size:13px; color:var(--warn); margin:2px 0 14px; min-height:20px}
 .setup-hint.ok{color:var(--hl)}
+.btn-link{display:block; width:100%; margin-top:10px; padding:6px 0; background:none; border:0; cursor:pointer; font-size:12.5px; color:var(--muted); text-decoration:underline; text-underline-offset:3px}.btn-link:hover{color:var(--txt)}
 .calib-box{text-align:center}
 .calib-ico{font-size:56px; color:var(--warn); animation:pulse 1.1s infinite}
 .calib-ico.ok{color:var(--hl); animation:none}
