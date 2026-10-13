@@ -250,6 +250,10 @@ h3{font-size:18px}
 .plan-why{margin-top:6px; color:var(--muted); font-size:12.5px; line-height:1.7}
 .plan-why .pw.lock{color:var(--warn)}
 
+/* ---- 环境预检横幅（微信内 / file:// / 无 getUserMedia 时才出现） ---- */
+.env-warn{padding:9px 18px; background:rgba(255,179,71,.12); border-bottom:1px solid rgba(255,179,71,.38);
+  color:var(--warn); font-size:13px; line-height:1.65}
+
 /* ---- 体感关卡 ---- */
 .game-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin:14px 0 4px}
 .game-card{padding:14px; border:1px solid var(--line); border-radius:12px; cursor:pointer; transition:.16s; background:rgba(255,255,255,.02)}
@@ -270,4 +274,18 @@ h3{font-size:18px}
   .hud-reps b{font-size:60px}
   #main{padding:14px}
   .hero-stats{grid-template-columns:1fr 1fr}
+}
+/* 手机竖屏：画幅改为竖向比例，才容得下全身 */
+@media (max-width:900px) and (orientation:portrait){
+  .stage,.posture-stage{aspect-ratio:3/4}
+  .hud-reps b{font-size:52px}
+  .mask-box{max-width:92%}
+}
+/* 矮屏弹窗不要撑爆：内部可滚，dvh 避免 iOS Safari 工具栏遮挡 */
+@media (max-height:720px){
+  .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}
+  .modal-box canvas{max-height:38vh}
+}
+@media (prefers-reduced-motion:reduce){
+  .screen.active{animation:none}
 }

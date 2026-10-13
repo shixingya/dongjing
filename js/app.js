@@ -9,6 +9,16 @@
   const $$ = s => [...document.querySelectorAll(s)];
   const L = X.LAND;
 
+  /* ---------------- 设备与环境探测（移动端 / iOS Safari / 微信内 专项） ----------------
+   * 手机是“办公室即练”的主入口，而这些坑不处理就是直接打不开：
+   * 微信内置浏览器无 getUserMedia；iOS 要用户手势才允许发音；移动端满分辨率+高帧率会发热降帧。 */
+  const UA = navigator.userAgent || '';
+  const IS_IOS = /iP(hone|ad|od)/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+  const IS_ANDROID = /Android/i.test(UA);
+  const IS_MOBILE = IS_IOS || IS_ANDROID || (navigator.maxTouchPoints > 1 && innerWidth < 900);
+  const IN_WX = /MicroMessenger|WeChat|wxwork/i.test(UA);
+  const DETECT_GAP = IS_MOBILE ? 55 : 28;      // 移动端 ~18fps 保续航，桌面 ~35fps 保跟手
+
   /* ---------------- 存储 ---------------- */
   const KEY = 'dongjing_v1';
   const DEF = { records: [], posture: [], quota: { month: '', used: 0 }, set: { voice: true, sfx: true, mirror: true, weight: 60, dailyGoal: 30 }, pro: false };
@@ -54,13 +64,35 @@
   };
 
   /* ---------------- 语音纠错（Web Speech，节流） ---------------- */
-  let lastSpeak = 0, zhVoice = null;
+  let lastSpeak = 0, zhVoice = null, speechUnlocked = false, kbIv = null;
   function pickVoice() {
     const vs = speechSynthesis.getVoices ? speechSynthesis.getVoices() : [];
     zhVoice = vs.find(v => /zh|CN/i.test(v.lang) && /female|xiaoxiao|yun|hiu/i.test(v.name))
       || vs.find(v => /zh|CN/i.test(v.lang)) || null;
   }
   if (window.speechSynthesis) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+  /* iOS/Safari：只有在用户手势里说过话，之后程序触发的语音才肯响——第一次点击时静默解锁 */
+  function unlockSpeech() {
+    if (speechUnlocked || !window.speechSynthesis) return;
+    speechUnlocked = true;
+    try {
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0; u.lang = 'zh-CN';
+      speechSynthesis.speak(u);
+      document.removeEventListener('click', unlockSpeech, true);
+      document.removeEventListener('touchstart', unlockSpeech, true);
+    } catch (e) {}
+  }
+  document.addEventListener('click', unlockSpeech, true);
+  document.addEventListener('touchstart', unlockSpeech, true);
+  /* iOS 会在长句中途静挂起语音：朗读期间做一次 pause/resume 心跳保活 */
+  function keepAliveSpeak(on) {
+    clearInterval(kbIv); kbIv = null;
+    if (!on || !window.speechSynthesis) return;
+    kbIv = setInterval(() => {
+      try { if (speechSynthesis.speaking && !speechSynthesis.paused) { speechSynthesis.pause(); speechSynthesis.resume(); } } catch (e) {}
+    }, 9000);
+  }
   function speak(txt, force) {
     if (!DB.set.voice || !window.speechSynthesis) return;
     const now = Date.now();
@@ -68,10 +100,13 @@
     lastSpeak = now;
     try {
       speechSynthesis.cancel();
+      if (speechSynthesis.paused) speechSynthesis.resume();
       const u = new SpeechSynthesisUtterance(txt);
       u.lang = 'zh-CN'; u.rate = 1.15; u.volume = 1;
       if (zhVoice) u.voice = zhVoice;
+      u.onend = () => { clearInterval(kbIv); kbIv = null; };
       speechSynthesis.speak(u);
+      keepAliveSpeak(true);
     } catch (e) {}
   }
 
@@ -165,7 +200,10 @@
     if (state.stream) return state.stream;
     if (state.camPromise) return state.camPromise;
     state.camPromise = navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }, audio: false
+      video: IS_MOBILE
+        ? { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }   // 手机：降分辨率跑满帧，不发热
+        : { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+      audio: false
     }).then(st => {
       state.stream = st;
       [$('#cam'), $('#pst-cam')].forEach(v => { v.srcObject = st; v.play().catch(() => {}); });
@@ -298,7 +336,7 @@
       if (!state.engine || video.readyState < 2 || !video.videoWidth) return;
       canvas.width = video.videoWidth; canvas.height = video.videoHeight;
       const ts = performance.now();
-      if (ts - lastDetectTs < 28) return;               // ~35fps 上限
+      if (ts - lastDetectTs < DETECT_GAP) return;               // 桌面 ~35fps / 移动端 ~18fps
       lastDetectTs = ts;
       let res;
       try { res = state.engine.detectForVideo(video, ts); }
@@ -352,7 +390,7 @@
   function fillTrainChrome(ex) {
     $('#setup-ico').textContent = ex.view === 'side' ? '📐' : (ex.seated ? '🪑' : '📷');
     $('#setup-title').textContent = (ex.view === 'side' ? '机位：侧面' : '机位：正面') + (ex.seated ? ' · 坐姿即可' : '');
-    $('#setup-txt').textContent = ex.setup;
+    $('#setup-txt').textContent = ex.setup + (IS_MOBILE && !ex.game ? '（手机建议横屏放置，全身更容易入镜）' : '');
     $('#side-name').textContent = ex.name + ' · 要领';
     $('#side-tips').innerHTML = ex.tips.map(t => '<li>' + t + '</li>').join('');
     $('#side-issues').textContent = '暂无';
@@ -1391,9 +1429,54 @@
   bindSet('#chk-mirror', 'mirror', v => { $('#cam').classList.toggle('no-mirror', !v); $('#pst-cam').classList.toggle('no-mirror', !v); });
   $('#btn-voice').onclick = () => { DB.set.voice = !DB.set.voice; save(); renderMe(); toast(DB.set.voice ? '语音纠错已开启' : '语音纠错已关闭'); };
 
+  /* ---------------- 移动端可用性：环境预检 + 后台暂停 + 关页释放 ---------------- */
+  function envCheck() {
+    const el = $('#env-warn'); if (!el) return;
+    const hasCam = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    const secure = location.protocol === 'https:' || location.hostname === 'localhost' ||
+      location.hostname === '127.0.0.1';
+    if (!IN_WX && hasCam && secure) { el.hidden = true; return; }
+    el.textContent = IN_WX
+      ? '⚠️ 微信内置浏览器无法调用摄像头：点右上角「···」→ 选择在 Safari / Chrome 浏览器中打开，体验完整功能'
+      : !hasCam
+        ? '⚠️ 当前浏览器不支持摄像头识别（无 getUserMedia）：请换较新版本的 Chrome / Safari / Edge'
+        : location.protocol === 'file:'
+          ? '⚠️ 双击本地文件打开时浏览器禁用摄像头：在 dongjing 目录下执行 python -m http.server 8790，再访问 http://localhost:8790'
+          : '⚠️ 当前是 ' + location.protocol + ' 环境，浏览器为安全禁用摄像头：请通过 HTTPS 链接或 localhost 访问';
+    el.hidden = false;
+  }
+  let autoPaused = null;                    // 因切后台而停掉的那条循环，回来自动接上
+  document.addEventListener('visibilitychange', () => {
+    try { window.speechSynthesis && speechSynthesis.cancel(); } catch (e) {}
+    if (document.hidden) {
+      const trainOn = (T.phase === 'setup' || T.phase === 'calib' || T.phase === 'live' ||
+        T.phase === 'rest' || T.phase === 'game') && curScreen === 'train';
+      if (trainOn && rafId) { autoPaused = 'train'; stopLoop(); }            // 省电，且不把后台冻结的 rAF 误当成“没识到人”
+      else if (P.on && rafId) { autoPaused = 'posture'; stopLoop(); }
+      else autoPaused = null;
+    } else if (autoPaused === 'train') {
+      autoPaused = null; lastDetectTs = 0;
+      startLoop($('#cam'), $('#skel'), onTrainFrame);
+      if (T.phase === 'live' || T.phase === 'game') feedback('回来了，继续！', 'good', 'resume', true, 0);
+    } else if (autoPaused === 'posture') {
+      autoPaused = null; lastDetectTs = 0;
+      startLoop($('#pst-cam'), $('#pst-skel'), onPostureFrame);
+    } else autoPaused = null;
+  });
+  /* 关页/切走：释放摄像头，手机上的相机指示灯不该一直亮着 */
+  window.addEventListener('pagehide', () => {
+    try {
+      if (state.stream) { state.stream.getTracks().forEach(t => t.stop()); state.stream = null; state.camPromise = null; }
+    } catch (e) {}
+  });
+
   /* ---------------- 启动 ---------------- */
-  renderHome(); renderMe(); refreshChip();
-  window.__dongjing = { state, DB, T, get G() { return G; }, openGame };   // 调试句柄：控制台可读 lastLm/训练/关卡状态做远程诊断
+  renderHome(); renderMe(); refreshChip(); envCheck();
+  window.__dongjing = {          // 调试句柄：控制台可读 lastLm/训练/关卡/环境状态做远程诊断
+    state, DB, T, get G() { return G; }, get raf() { return rafId; },
+    openGame, envCheck,
+    env: { IS_IOS, IS_ANDROID, IS_MOBILE, IN_WX, DETECT_GAP, get speechUnlocked() { return speechUnlocked; } }
+  };
   document.addEventListener('keydown', e => {
     const openModal = $$('.modal').find(m => !m.hidden);
     if (e.key === 'Escape' && openModal) { openModal.hidden = true; return; }
