@@ -1048,4 +1048,44 @@ function mkHand(tipDist) {
   console.log('[it] 全部断言通过');
 }
 
+/* ================= v3.0 训练构成 modeSplit ================= */
+{
+  const fail = m => { console.log('[ms] FAIL:', m); process.exit(1); };
+  if (X.MODE_SPLIT.length !== 4) fail('四类应为 4, 实际 ' + X.MODE_SPLIT.length);
+
+  /* 空数据 / null 不崩 */
+  const e = X.modeSplit([]);
+  if (e.totalSessions !== 0 || e.dominantKey !== null || e.cats.length !== 4) fail('空数据应 tot0/dom null/4 类');
+  if (X.modeSplit(null).cats.length !== 4) fail('null 应返回 4 类');
+
+  /* 混合分类：circuit 优先 → game → time → reps，点数复用 recPoints */
+  const recs = [
+    { ts: 1, ex: 'squat',  mode: 'reps', valid: 10 },   // reps
+    { ts: 2, ex: 'plank',  mode: 'time', valid: 30 },   // time 30/10=3
+    { ts: 3, ex: 'game-runner', mode: 'game', valid: 60 }, // game 60/3=20
+    { ts: 4, ex: 'circuit', mode: 'reps', valid: 12 },  // circuit 优先于 mode
+    { ts: 5, ex: 'pushup', mode: 'reps', valid: 5 },    // reps
+    { ts: 6, ex: 'jack',   mode: 'reps', valid: 20 },   // reps
+    { ts: NaN }, null, { ex: 'squat', mode: 'reps', valid: 9 } // 非有限 ts / null / 无 ts 均丢弃
+  ];
+  const r = X.modeSplit(recs);
+  if (r.totalSessions !== 6) fail('total 应 6（无 ts/null 丢弃）实际 ' + r.totalSessions);
+  const by = {}; r.cats.forEach(c => by[c.key] = c);
+  if (by.reps.sessions !== 3 || by.reps.points !== 35) fail('计次 3 节/35 点 实际 ' + by.reps.sessions + '/' + by.reps.points);
+  if (by.time.sessions !== 1 || by.time.points !== 3) fail('计时 1 节/3 点 实际 ' + by.time.points);
+  if (by.game.sessions !== 1 || by.game.points !== 20) fail('关卡 1 节/20 点 实际 ' + by.game.points);
+  if (by.circuit.sessions !== 1 || by.circuit.points !== 12) fail('循环 1 节/12 点 实际 ' + by.circuit.points);
+  if (by.reps.pct !== 50) fail('计次占比应 50% 实际 ' + by.reps.pct);
+  if (r.dominantKey !== 'reps') fail('主导应计次 实际 ' + r.dominantKey);
+
+  /* 主导平手按点数决胜 */
+  const tie = X.modeSplit([
+    { ts: 1, ex: 'squat', mode: 'reps', valid: 5 },   // reps 1 节 5 点
+    { ts: 2, ex: 'plank', mode: 'time', valid: 90 }   // time 1 节 9 点
+  ]);
+  if (tie.dominantKey !== 'time') fail('节数平手应选点数多的计时 实际 ' + tie.dominantKey);
+
+  console.log('[ms] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

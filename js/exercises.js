@@ -1454,12 +1454,46 @@
     return { items, enough: true, olderN: older.length, recentN: recent.length };
   }
 
+  /* ================= 训练构成（v3.0）=================
+   * 按练法把记录分入四类：计次力量 / 计时静力 / 体感关卡 / 循环跟练，
+   * 统计各节数与训练点占比，看你是“力量型”还是“玩家型”。点数仍复用 recPoints。 */
+  const MODE_SPLIT = [
+    { key: 'reps',    name: '计次训练', ico: '\ud83d\udcaa' },
+    { key: 'time',    name: '计时静力', ico: '\u23f3' },
+    { key: 'game',    name: '体感关卡', ico: '\ud83c\udfae' },
+    { key: 'circuit', name: '循环跟练', ico: '\ud83d\udd01' }
+  ];
+  function modeClassify(r) {
+    if (r.ex === 'circuit') return 'circuit';
+    if (r.mode === 'game') return 'game';
+    if (r.mode === 'time') return 'time';
+    return 'reps';
+  }
+  function modeSplit(records) {
+    const rs = Array.isArray(records) ? records : [];
+    const acc = {}; MODE_SPLIT.forEach(c => { acc[c.key] = { sessions: 0, points: 0 }; });
+    let totalSessions = 0, totalPoints = 0;
+    rs.forEach(r => {
+      if (!r || !Number.isFinite(r.ts)) return;
+      const k = modeClassify(r), p = recPoints(r);
+      acc[k].sessions++; acc[k].points += p;
+      totalSessions++; totalPoints += p;
+    });
+    const cats = MODE_SPLIT.map(c => ({
+      key: c.key, name: c.name, ico: c.ico, sessions: acc[c.key].sessions, points: acc[c.key].points,
+      pct: totalSessions ? Math.round(acc[c.key].sessions / totalSessions * 100) : 0
+    }));
+    let dominant = null;
+    cats.forEach(c => { if (c.sessions && (!dominant || c.sessions > dominant.sessions || (c.sessions === dominant.sessions && c.points > dominant.points))) dominant = c; });
+    return { cats, totalSessions, totalPoints, dominantKey: dominant ? dominant.key : null, dominantName: dominant ? dominant.name : '' };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

@@ -127,6 +127,8 @@
 
 - ✅ **v2.9 已交付（纠错改善趋势：“老毛病到底改改了没”）**：① `issueTrend(records)` 纯函数—把有合法 ts 的记录按时间升序对半分成“之前/最近”两段（`half = floor(n/2)`，不靠外部时间基准、只相对分），逐段累加 `r.issues` 里的错误次数，比较两个半区“每节平均犯几次”的频率；② **五种判定**：`better`（最近 ≤ 之前×0.7）/`gone`（之前有、最近零）/`worse`（最近 ≥ 之前×1.3）/`new`（之前零、最近有）/`flat`（其余），按总次数降序取前几项；③ **不足 2 节 / 全无效记录 / 零 issues 不崩**（`enough=false` 或 `items` 空）；④ 渲染行列表（问题文案 + `旧→新` 次数 + 变化标签），好转类（better/gone）绿、恶化类（worse/new）橙，副标题“对比最近 N 节与之前 M 节 · X 项在好转”；⑤ 与首页教练记忆同一思路但拉成时间轴趋势（ISSUES 字典复用，不新建口径）；⑥ 单测覆盖 <2 条 enough=false、乱序传入验证排序、older17>recent 2=better/new/gone 三路、每节频率持平=flat、全无效/零 issues items 空；浏览器冒烟注入 5 节（sqLean 前半 11→1、wsUp 仅后半、lnAsym 仅前半），DOM 3 行与 `DJX.issueTrend` 逐项 chg/msg/tag class 零偏差、better/new/gone 三路正确、副标题“2 项在好转”、0 console error。
 
+- ✅ **v3.0 已交付（训练构成：你是“力量型”还是“玩家型”）**：① `modeSplit(records)` 纯函数—按练法把记录分入 `MODE_SPLIT` 四类（计次训练 / 计时静力 / 体感关卡 / 循环跟练），逐类累加 sessions / points，返回 `{cats(4),totalSessions,totalPoints,dominantKey,dominantName}`；② **归类优先级 circuit → game → time → reps**：先看 `ex==='circuit'`（循环记录 mode 仍为 reps，靠 id 识别），再按 `mode` 分 game/time，其余归 reps；③ **与部位覆盖正交**（一个看练哪块肌肉、一个看练法构成），points 继续复用 `recPoints`（与目标环/热力图/成就/时段一套）、非有限 ts/null 丢弃不崩；dominant 按节数优先、平手按点数决胜；④ 渲染四行横向迷你条（宽=sessions/max）、主导类加 best 高亮，右侧显占比百分比，副标题“你是「X」型 · 共 N 节 / M 点”；⑤ 单测覆盖四类恰 4 类、空数据 tot0/dom null、null 入参不崩、混合分类（circuit 优先于 mode、game 得分÷3、time 秒÷10、reps 直取）与非有限 ts/null/无 ts 丢弃、主导平手按点数决胜；浏览器冒烟注入“计次×3 + 计时 + 关卡 + 循环”混合 6 节，DOM 4 行与 `DJX.modeSplit` 逐行 sessions/points/pct/best 零偏差、主导=计次训练、共 6 节 / 70 点、0 console error。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；

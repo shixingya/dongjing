@@ -429,6 +429,17 @@ h3{font-size:18px}
 .it-tag{font-size:12px; font-weight:700; text-align:right; color:var(--muted)}
 .it-tag.good{color:var(--hl)}
 .it-tag.bad{color:var(--warn)}
+/* ---- v3.0 训练构成 ---- */
+.ms-rows{display:flex; flex-direction:column; gap:8px; margin-top:8px}
+.ms-row{display:grid; grid-template-columns:22px 68px 1fr 40px; align-items:center; gap:9px}
+.ms-ico{font-size:14px; text-align:center}
+.ms-name{font-size:12.5px; color:var(--muted)}
+.ms-bar{height:10px; border-radius:6px; background:#1a2434; overflow:hidden}
+.ms-bar i{display:block; height:100%; background:var(--hl2); border-radius:6px; min-width:2px}
+.ms-num{font-size:12px; color:var(--txt); text-align:right}
+.ms-row.best .ms-name{color:var(--hl); font-weight:700}
+.ms-row.best .ms-bar i{background:var(--hl)}
+.ms-row.best .ms-num{color:var(--hl)}
 
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}

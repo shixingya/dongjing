@@ -1567,6 +1567,7 @@
     renderRhythm();
     renderCoverage();
     renderIssueTrend();
+    renderMode();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1749,6 +1750,24 @@
     const sum = $('#bc-sum');
     const tail = bc.coveragePct === 100 ? '· 全身部位都练到啦 ✦' : ('· 还缺 ' + bc.gaps.join('、'));
     if (sum) sum.textContent = '已练到 ' + bc.coveredCount + '/' + bc.regionCount + ' 个部位 ' + tail;
+  }
+
+  /* 训练构成：modeSplit 纯逻辑按计次/计时/关卡/循环四类聚合节数与点数，这里只画横向条看出你是力量型还是玩家型 */
+  function renderMode() {
+    const box = $('#ms-rows'); if (!box) return;
+    const ms = X.modeSplit(DB.records);
+    if (!ms.totalSessions) { box.innerHTML = '<div class="empty-tip">还没有训练记录，练几种不同练法这里会显示你的构成</div>'; const s0 = $('#ms-sum'); if (s0) s0.textContent = ''; return; }
+    const max = Math.max(1, ...ms.cats.map(c => c.sessions));
+    box.innerHTML = ms.cats.map(c => {
+      const pctw = Math.round(c.sessions / max * 100);
+      return '<div class="ms-row' + (c.key === ms.dominantKey ? ' best' : '') + '" title="' + c.name + ' · ' + c.sessions + ' 节 · ' + c.points + ' 点 · 占 ' + c.pct + '%">' +
+        '<span class="ms-ico">' + c.ico + '</span>' +
+        '<span class="ms-name">' + c.name + '</span>' +
+        '<span class="ms-bar"><i style="width:' + pctw + '%"></i></span>' +
+        '<span class="ms-num">' + (c.sessions ? c.pct + '%' : '—') + '</span></div>';
+    }).join('');
+    const sum = $('#ms-sum');
+    if (sum) sum.textContent = '你是「' + ms.dominantName + '」型 · 共 ' + ms.totalSessions + ' 节 / ' + ms.totalPoints + ' 点';
   }
 
   /* ---------------- 我的 / Pro ---------------- */
