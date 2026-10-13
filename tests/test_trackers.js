@@ -725,4 +725,47 @@ function mkHand(tipDist) {
   console.log('[heat] 全部断言通过');
 }
 
+/* ================= v2.2 成就徽章 achStreaks / computeAchievements ================= */
+{
+  const D = 864e5;
+  const fail = m => { console.log('[ach] FAIL:', m); process.exit(1); };
+  const t0 = new Date(2026, 9, 14).getTime();               // 周三 00:00
+  const nowNoon = t0 + 12 * 3600e3;
+  const mk = (off, ex, mode, valid) => ({ ts: t0 - off * D, ex, mode, valid });
+
+  /* --- 空数据：全未解锁、total=9 --- */
+  const zero = X.computeAchievements({ records: [], posture: [] }, { now: nowNoon });
+  if (zero.total !== 9) fail('徽章数期望 9 实际 ' + zero.total);
+  if (zero.earned !== 0) fail('空数据不应有解锁');
+  if (zero.list[0].id !== 'first' || zero.list[0].earned) fail('first 应未解锁');
+  console.log('[ach] 空数据 OK, total =', zero.total);
+
+  /* --- 混合数据：口径与 streak 自洽 --- */
+  const recs = [mk(0, 'squat', 'reps', 12), mk(1, 'jack', 'reps', 8), mk(2, 'plank', 'time', 60),
+    mk(3, 'game-collect', 'game', 18), mk(4, 'circuit', 'reps', 0)];
+  const res = X.computeAchievements({ records: recs, posture: [{ ts: t0 }] }, { now: nowNoon });
+  const g = id => res.list.find(b => b.id === id);
+  if (!g('first').earned) fail('first 应解锁');
+  if (g('collector').cur !== 3 || g('collector').earned) fail('不同动作 3 个 squat/jack/plank（game-/circuit 不算）');
+  if (g('points').cur !== 32) fail('训练点期望 32(12+8+6+6+0) 实际 ' + g('points').cur);
+  if (g('streak7').cur !== 5 || g('streak7').earned) fail('连续 5 天未达 7');
+  if (g('streak7').longest !== 5) fail('longest 期望 5 实际 ' + g('streak7').longest);
+  if (!g('circuit').earned || !g('gamer').earned || !g('posture').earned) fail('circuit/game/posture 应解锁');
+  if (res.earned !== 4) fail('解锁数期望 4 实际 ' + res.earned);
+  console.log('[ach] 混合数据 OK, earned =', res.earned, '/ streak cur/longest =', g('streak7').cur, g('streak7').longest);
+
+  /* --- 探索家动态描述用真实动作数；pct 不超 1 --- */
+  if (g('explorer').target !== X.EXERCISES.length) fail('explorer 目标应 = 动作库数');
+  if (!/全部 \d+ 个动作/.test(g('explorer').desc)) fail('explorer desc 应含动态动作数: ' + g('explorer').desc);
+  if (!res.list.every(b => b.pct >= 0 && b.pct <= 1 && b.cur <= b.target)) fail('pct/cur 越界');
+
+  /* --- 全部 13 动作都练过 → explorer 解锁 --- */
+  const allEx = X.EXERCISES.map((e, i) => mk(i, e.id, 'reps', 1));
+  const full = X.computeAchievements({ records: allEx, posture: [] }, { now: nowNoon });
+  if (!full.list.find(b => b.id === 'explorer').earned) fail('练过全部动作应解锁 explorer');
+  console.log('[ach] explorer 全解锁 OK (target=' + X.EXERCISES.length + ')');
+
+  console.log('[ach] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

@@ -111,6 +111,8 @@
 
 - ✅ **v2.1 已交付（训练热力图：把“近三个月到底坚不坚持”一眼看清）**：① 分桶与等级全放 `exercises.js` 纯函数 `buildHeatmap(records, {today, weeks, dailyGoal})`（按周列优先排布、周一开头，返回每周 7 格 + 每格 `{ts,points,level,future,isToday}` + total/active/streak），渲染只负责画 DOM，可完整离线单测；② **训练点口径全工程唯一**：抽出一个 `recPoints(r)` 纯函数（计次 1 有效=1 点 / 计时每 10s=1 点 / 关卡得分÷3），今日目标环的 `todayPoints()` 与热力图共用同一个函数，不再有两套算法；③ **等级跟着目标走**：设了 `dailyGoal` 就按 34%/67%/100% 分 L2/L3/L4（没达到目标也能看出深浅），没设则用绝对档位 `[5,10,15]`（修正了初版 `[1,10,20,30]` 只用前三个边界、导致永远跳不过 L1/L2 的分配缺陷）；④ **未来格与今日格区分**：本周周三是今天、周四~周日尚未到期→`future` 空色描边不计入 total/active，今天高亮外框；streak 与现有 `streakDays()` 一致地“今天未练就从昨天起算”；⑤ 单测覆盖 recPoints 四路、空历史结构、分桶/等级/未来格/连续、goal 缩放不 NaN；浏览器冒烟以注入记录驱动渲染出 l1~l4 全档位与正确 total/active/streak（并实测验证 goal 模式阈值随每日目标缩放、绝对模式与 goal 模式分档一致）。
 
+- ✅ **v2.2 已交付（成就徽章：把坚持变成能集、能晒的里程碑）**：① `computeAchievements(db, {today})` + `achStreaks(records, now)` 纯函数—9 枚徽章（first / collector(5) / explorer(全部 13) / streak7 / streak30 / points(1000) / circuit / gamer / posture）全部数据驱动，返回逐枚 `{cur,target,pct,earned}` 与总览 `{earned,total}`，渲染层只画 DOM；② **口径不另起炉灶**：训练点走已有的 `recPoints`（与目标环/热力图一套），“不同动作”只数 EXERCISES 真 id（game-/circuit 哨兵值不计），“连续打卡”cur 今天未练从昨天起算、同时算 longest；explorer 描述用 `EXERCISES.length` 动态生成，动作库增减不会写死文案；③ 解锁/未解锁在 UI 上分亮色与灰化两态，未解锁也给真实进度条（封顶显示 Math.min(cur,target)）与 hover 释义；④ 单测覆盖空数据 total=9/全未解锁、混合数据四路口径与 streak cur/longest、explorer 动态描述与全解锁、pct/cur 不越界；浏览器冒烟注入 7 天连续训练 + 关卡 + 循环 + 体态记录，逐张比对 DOM 的 `.earned` 类与 `computeAchievements` 纯函数完全一致（点亮 6/9，sum 文案一致，0 偏差）。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；

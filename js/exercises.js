@@ -1162,12 +1162,74 @@
     return { weeks: cols, total, active, streak, windowDays: weeks * 7, goal };
   }
 
+  /* ================= 成就徽章（v2.2）=================
+   * 从本机数据提炼“里程碑”，全部纯函数可离线单测；渲染交给 app.js。
+   * 训练点口径继续复用 recPoints，与目标环 / 热力图一套算法。 */
+  function achStreaks(records, now) {
+    const D = 864e5;
+    const ds = t => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); };
+    const days = new Set();
+    (Array.isArray(records) ? records : []).forEach(r => { if (r && Number.isFinite(r.ts)) days.add(ds(r.ts)); });
+    const arr = [...days].sort((a, b) => a - b);
+    let longest = 0, run = 0, prev = null;
+    arr.forEach(d => { run = (prev !== null && d === prev + D) ? run + 1 : 1; if (run > longest) longest = run; prev = d; });
+    let cur = 0, c = ds(Number(now) || Date.now());
+    if (!days.has(c)) c -= D;                          // 今天未练则从昨天起算
+    while (days.has(c)) { cur++; c -= D; }
+    return { cur, longest };
+  }
+
+  function computeAchievements(db, opts) {
+    const o = opts || {};
+    const d = (db && typeof db === 'object') ? db : {};
+    const records = Array.isArray(d.records) ? d.records : [];
+    const posture = Array.isArray(d.posture) ? d.posture : [];
+    const now = Number(o.now || o.today) || Date.now();
+    const exTotal = EXERCISES.length;
+    const exIds = new Set(EXERCISES.map(e => e.id));
+    let points = 0, hasCircuit = false, hasGame = false;
+    const exSeen = new Set();
+    records.forEach(r => {
+      if (!r) return;
+      points += recPoints(r);
+      if (r.ex && exIds.has(r.ex)) exSeen.add(r.ex);
+      if (r.ex === 'circuit') hasCircuit = true;
+      if (r.mode === 'game' || (r.ex && String(r.ex).indexOf('game-') === 0)) hasGame = true;
+    });
+    const st = achStreaks(records, now);
+    const cur = {
+      count: records.length, ex: exSeen.size, streak: st.cur,
+      points: Math.round(points), circuit: hasCircuit ? 1 : 0, game: hasGame ? 1 : 0, posture: posture.length
+    };
+    const defs = [
+      { id: 'first',     ico: '\ud83c\udf31', name: '开始出发',   desc: '完成第一次训练',        kind: 'count',   target: 1 },
+      { id: 'collector', ico: '\ud83c\udfb2', name: '尝鲜家',     desc: '练过 5 个不同动作',        kind: 'ex',      target: 5 },
+      { id: 'explorer',  ico: '\ud83e\udded', name: '动作收藏家', desc: '练过全部 ' + exTotal + ' 个动作', kind: 'ex', target: exTotal },
+      { id: 'streak7',   ico: '\ud83d\udd25', name: '七日之约',   desc: '连续打卡 7 天',            kind: 'streak',  target: 7 },
+      { id: 'streak30',  ico: '\u26a1', name: '月度铁人',   desc: '连续打卡 30 天',           kind: 'streak',  target: 30 },
+      { id: 'points',    ico: '\ud83d\udcaf', name: '千点俱乐部', desc: '累计 1000 训练点',        kind: 'points',  target: 1000 },
+      { id: 'circuit',   ico: '\ud83d\udd01', name: '循环达人',   desc: '完成一次循环跟练',      kind: 'circuit', target: 1 },
+      { id: 'gamer',     ico: '\ud83c\udfae', name: '玩家上线',   desc: '玩过一次体感关卡',        kind: 'game',    target: 1 },
+      { id: 'posture',   ico: '\ud83e\uddcd', name: '体态初评',   desc: '做过一次体态评估',        kind: 'posture', target: 1 }
+    ];
+    const list = defs.map(b => {
+      const c = cur[b.kind] || 0;
+      return {
+        id: b.id, ico: b.ico, name: b.name, desc: b.desc, kind: b.kind,
+        cur: Math.min(c, b.target), target: b.target, pct: b.target ? Math.min(1, c / b.target) : 0,
+        earned: c >= b.target,
+        longest: b.kind === 'streak' ? st.longest : undefined
+      };
+    });
+    return { list, earned: list.filter(b => b.earned).length, total: list.length };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap,
+    recPoints, buildHeatmap, achStreaks, computeAchievements,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

@@ -353,6 +353,20 @@ h3{font-size:18px}
 .hm-cell.today{outline:1.5px solid var(--hl); outline-offset:1px}
 .hm-legend{display:flex; align-items:center; gap:4px; margin-top:9px; font-size:11px; color:var(--muted)}
 .hm-legend .hm-cell{width:11px; height:11px}
+/* ---- v2.2 成就徽章墙 ---- */
+.ach-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:10px; margin-top:6px}
+.ach{position:relative; background:var(--bg2); border:1px solid var(--line); border-radius:12px; padding:12px 8px 10px; text-align:center; transition:transform .12s ease, border-color .12s ease}
+.ach:hover{transform:translateY(-2px)}
+.ach-ico{display:block; font-size:26px; line-height:1; margin-bottom:6px}
+.ach-name{display:block; font-size:12.5px; color:var(--txt); margin-bottom:7px}
+.ach-bar{display:block; height:4px; border-radius:3px; background:#1a2434; overflow:hidden}
+.ach-bar i{display:block; height:100%; background:var(--hl2); border-radius:3px}
+.ach-meta{display:block; font-size:10.5px; color:var(--muted); margin-top:5px}
+.ach.earned{border-color:var(--hl); background:linear-gradient(160deg, rgba(57,217,138,.12), var(--bg2))}
+.ach.earned .ach-bar i{background:var(--hl)}
+.ach.earned .ach-meta{color:var(--hl)}
+.ach.locked{opacity:.62}
+.ach.locked .ach-ico{filter:grayscale(1) brightness(.85)}
 
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}

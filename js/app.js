@@ -1560,6 +1560,7 @@
   /* ---------------- 报告页 ---------------- */
   function renderReport() {
     renderHeatmap();
+    renderAchievements();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1613,6 +1614,24 @@
     if (sum) sum.textContent = hm.total > 0
       ? '近 ' + hm.windowDays + ' 天 · 累计 ' + hm.total + ' 训练点 · 活跃 ' + hm.active + ' 天 · 连续打卡 ' + hm.streak + ' 天'
       : '近 ' + hm.windowDays + ' 天还没有训练记录，练一次这里就会亮起来 ✦';
+  }
+
+  /* 成就徽章墙：computeAchievements 纯逻辑算出解锁/进度，这里只负渲染 DOM */
+  function renderAchievements() {
+    const grid = $('#ach-grid'); if (!grid) return;
+    const ach = X.computeAchievements(DB, { today: Date.now() });
+    grid.innerHTML = ach.list.map(b => {
+      const meta = b.target === 1 ? (b.earned ? '已达成' : '未达成')
+        : (b.cur + '/' + b.target);
+      const tip = b.name + ' · ' + b.desc + (b.target > 1 ? '（' + b.cur + '/' + b.target + '）' : '');
+      return '<div class="ach ' + (b.earned ? 'earned' : 'locked') + '" title="' + tip + '">' +
+        '<span class="ach-ico">' + b.ico + '</span>' +
+        '<b class="ach-name">' + b.name + '</b>' +
+        '<span class="ach-bar"><i style="width:' + Math.round(b.pct * 100) + '%"></i></span>' +
+        '<span class="ach-meta">' + meta + '</span></div>';
+    }).join('');
+    const sum = $('#ach-sum');
+    if (sum) sum.textContent = '已点亮 ' + ach.earned + ' / ' + ach.total + ' 枚';
   }
 
   /* ---------------- 我的 / Pro ---------------- */
