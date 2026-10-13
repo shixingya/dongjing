@@ -974,4 +974,38 @@ function mkHand(tipDist) {
   console.log('[bc] 全部断言通过');
 }
 
+/* ================= v2.8 生涯总览 lifetimeStats ================= */
+{
+  const fail = m => { console.log('[lt] FAIL:', m); process.exit(1); };
+
+  /* 空数据 */
+  const e = X.lifetimeStats([]);
+  if (e.sessions !== 0 || e.points !== 0 || e.calories !== 0 || e.secs !== 0) fail('空数据应全 0');
+  if (e.firstTs !== 0 || e.activeDays !== 0 || e.distinctEx !== 0 || e.busiestMonth !== null) fail('空数据 firstTs0/天0/动作0/busiestMonth null');
+
+  /* 混合：跨月、time/game、非法记录、同天不重复计天 */
+  const T = (y, mo, d) => new Date(y, mo, d, 8, 0).getTime();
+  const recs = [
+    { ts: T(2026, 8, 10), ex: 'squat', mode: 'reps', valid: 10, secs: 120, cal: 8 },
+    { ts: T(2026, 9, 5), ex: 'squat', mode: 'reps', valid: 12, secs: 130, cal: 9 },
+    { ts: T(2026, 9, 6), ex: 'plank', mode: 'time', valid: 60, secs: 60, cal: 4 },
+    { ts: T(2026, 9, 6), ex: 'game-collect', mode: 'game', valid: 30, secs: 60, cal: 5 },  // 同日第二条
+    { ts: NaN, ex: 'x' },                                                                    // 丢弃
+    { ex: 'y' }                                                                              // 无 ts 丢弃
+  ];
+  const r = X.lifetimeStats(recs);
+  if (r.sessions !== 4) fail('sessions 应 4（2 条非法丢弃）实际 ' + r.sessions);
+  if (r.points !== 38) fail('points 应 38（10+12+6+10）实际 ' + r.points);
+  if (r.calories !== 26) fail('calories 应 26 实际 ' + r.calories);
+  if (r.secs !== 370) fail('secs 应 370 实际 ' + r.secs);
+  if (r.activeDays !== 3) fail('activeDays 应 3（同日两条算 1 天）实际 ' + r.activeDays);
+  if (r.distinctEx !== 2) fail('distinctEx 应 2（squat+plank，game 不算）实际 ' + r.distinctEx);
+  if (r.exTotal !== 13) fail('exTotal 应为动作库总数 13');
+  if (r.months !== 2) fail('months 应跨 2 个月实际 ' + r.months);
+  if (r.firstTs !== T(2026, 8, 10)) fail('firstTs 应最早一条');
+  if (!r.busiestMonth || r.busiestMonth.sessions !== 3 || r.busiestMonth.label !== '2026年10月') fail('最活跃月应 2026年10月 3 节 实际 ' + JSON.stringify(r.busiestMonth));
+
+  console.log('[lt] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

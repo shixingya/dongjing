@@ -123,6 +123,8 @@
 
 - ✅ **v2.7 已交付（部位覆盖度：发现“你总是忽略哪块部位”）**：① `bodyCoverage(records)` 纯函数—把 13 个动作按主要锻炼部位归入 `BODY_REGIONS` 五大块（下肢 squat/lunge/wallsit/highknees/jack、核心 plank、上肢 pushup/sidraise/grasp、颈肩 headshake/wave/shrug、侧链 sidestretch，恰好不重不漏盖满 13 个），逐块统计 sessions / points（复用 `recPoints`）/ exCovered（命中的不同动作数），返回 `{regions(5),regionCount,coveredCount,coveragePct,totalSessions,gaps,weakestName}`；② **只认真实动作库 id**：关卡 game- / 循环 circuit / null 不计；③ **gaps 一目了然**：sessions=0 的部位进 gaps，weakestName 取已覆盖里节数最少的一块；④ 渲染五行列表（图标+部位+节数/点数/动作命中数），已覆盖行高亮✓、空白行 `.gap` 弱化打灰标“缺”，副标题“已练到 N/5 个部位 · 还缺 X”；⑤ 单测覆盖 BODY_REGIONS 恰好 5 块/13 ids 不重不漏、空数据 pct0/gaps5、混合数据 covered3/pct60/total4（game+circuit+null 均排除）/gaps=[上肢,侧链]/weakest=核心、time 换算 points；浏览器冒烟注入“下肢×2 + 核心×1 + 颈肩×1 + game”，DOM 5 行与 `DJX.bodyCoverage` 逐行 name/gap/tag 零 mismatch、上肢与侧链两行为 gap、副标题“已练到 3/5 个部位 · 还缺 上肢、侧链”正确、0 console error。
 
+- ✅ **v2.8 已交付（生涯总览：把“你从开始到现在一共练了多少”一眼说完）**：① `lifetimeStats(records)` 纯函数—跨全部记录累加 `{sessions,points,calories,secs,activeDays,distinctEx,exTotal,firstTs,lastTs,months,busiestMonth}`；points 复用 `recPoints`、calories/secs 逐条累加（非法/无 ts 记录丢弃）、activeDays 按自然日去重、distinctEx 只数真实动作库 id（game-/circuit 不计）；② **busiestMonth** 按年-月分桶取节数最多的一个月（label 形如“2026年10月”）；空数据 sessions=0/busiestMonth=null；③ 渲染为报告页顶部八格统计宫格（总训练/训练点/运动时长/消耗热量/活跃天数/涵盖动作/坚持跨度/最活跃月，后两格 wide 跨两列），时长自动换算“X 时 Y 分”/“X 分钟”，hover 看口径与首末日期，副标题“从 X 开始已累计 N 节”；④ 单测覆盖空数据全 0/busiestMonth null、跨月混合数据 sessions4/points38/calories26/secs370/activeDays3（同日两条算 1 天）/distinctEx2（game 不计）/months2/firstTs 最早/最活跃月 sessions3、time+game 换算；浏览器冒烟注入“深蹲×2（不同天）+ 平板（计时）+ 关卡（与平板同天）”，DOM 8 格与 `DJX.lifetimeStats` 逐字段一致、总 4 节/38 点/26 千卡/3 天/动作 2/13/最活跃月“2026年10月”、0 console error。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；

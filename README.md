@@ -5,9 +5,9 @@
 纯网页 AI 体感私教：**13 个动作 · 33 关键点 · 26 条纠错规则 · 3 个体感关卡 · 7 天自动课表 · 8 项体态评估**，基于 MediaPipe Pose 在浏览器**本地实时推理**，画面不上传云端；
 像 Posiqo 一样**只统计标准有效次数**，动作错了实时语音纠正；像慧动少年一样提供**两步（正面+侧面）体态快评**；像 BodyArcade 一样**把动作做成关卡**；还能**记住你的老毛病**、**每次自己复盘**。
 
-![license](https://img.shields.io/badge/license-MIT-green) ![v1](https://img.shields.io/badge/version-v2.7-blue)
+![license](https://img.shields.io/badge/license-MIT-green) ![v1](https://img.shields.io/badge/version-v2.8-blue)
 
-## 功能（v2.7）
+## 功能（v2.8）
 
 - 🎥 摄像头实时姿态识别（33 关键点骨骼叠加，镜像预览，全程本地运算）
 - 🏋️ 十三个动作的有效次数引擎：力量系 **深蹲 / 开合跳 / 高抬腿 / 俯卧撑 / 弓步蹲 / 平板支撑 / 🧱靠墙静蹲**，坐姿上肢系（腿不入镜也能练）：**摇头放松 / 挥臂激活 / 🤸耸肩放松 / 🤲侧平举 / ✊手掌抓握（手指级，需 HandLandmarker）**，拉伸系：**🌗体侧伸展**
@@ -37,6 +37,7 @@
 - 🏆 动作最佳榜（v2.5）：报告页新增“动作最佳”卡，把你练过的每个动作聚合成一行——计次动作显单次最多次数、计时动作显单次最久秒数，主行还带练过几节 / 平均评分，hover 看累计总量与最近一次日期；按练过的节数排序、平手时按训练点决胜，只认真实动作库（关卡/循环不入榜），训练点仍复用同一个 `recPoints`（exercises.js 纯函数 `personalBests`，可离线单测）
 - 📅 星期训练节奏（v2.6）：报告页新增“星期节奏”卡，与时段分布互补（那个看“一天里什么时候练”、这个看“一周里星期几练”）——把记录按周一~周日分桶，横向迷你条按节数比较、高亮你最勤的一天，hover 看该日节数/训练点/平均评分，副标题还会告诉你“最勤的是星期几·周末占多少 %”（exercises.js 纯函数 `weekdayRhythm`，口径继续复用 `recPoints`，可离线单测）
 - 🧍 部位覆盖度（v2.7）：报告页新增“部位覆盖”卡，把 13 个动作按主要锻炼部位归入下肢/核心/上肢/颈肩/侧链五大块，逐块显示练过几节/训练点/命中几个动作，已覆盖的高亮打勾、长期空白（一节都没练过）的弱化打灰并标“缺”；副标题直接告诉你“已练到几块部位 · 还缺哪几块”，帮你发现总是忽略的部位（exercises.js 纯函数 `bodyCoverage`，只认真实动作库、关卡/循环不计，口径继续复用 `recPoints`，可离线单测）
+- 📊 生涯总览（v2.8）：报告页顶部新增“生涯总览”统计宫格，跨全部记录一眼累加：总训练节数 / 累计训练点 / 运动时长 / 消耗热量 / 活跃天数 / 涵盖动作（几个/13）/ 坚持跨度几个月 / 最活跃的月份，hover 看每项口径与首末训练日期；副标题“从 X 月 X 日开始，已累计 N 节”（exercises.js 纯函数 `lifetimeStats`，点数仍复用 `recPoints`、涵盖动作只认真实动作库，可离线单测）
 - 💎 商业占位：免费 = 7 个基础动作（含坐姿摇头/挥臂/耸肩与体侧伸展）+ 每月 6 次；Pro ¥29/月 · ¥168/年解锁 6 个动作（手指级抓握 + 俯卧撑/弓步蹲/平板支撑/侧平举/靠墙静蹲）。三个体感关卡与两步体态评估（含趋势）全部免费，不扣训练额度
 
 ## 运行
@@ -64,7 +65,7 @@ python -m http.server 8790
 dongjing/
 ├── index.html          # 单页应用（首页/训练/结果/体态/报告/我的）
 ├── css/style.css       # 深色健身 HUD 主题
-├── js/exercises.js     # 动作引擎：13 个动作的有效次数状态机 + 纠错规则 + 体态评估（正面 analyzePosture / 侧面 analyzePostureSide / 合并 mergePosture）+ 一句话编排（planFromText）+ 体感关卡逻辑（makeGame）+ 周课表（makeWeekPlan）+ 我的课程模板 + 数据备份（exportPayload/parseImport）+ 训练点与热力图分桶（recPoints/buildHeatmap）+ 成就徽章（computeAchievements）+ 周环比（weekCompare）+ 时段分布（daypartStats）+ 动作最佳榜（personalBests）+ 星期训练节奏（weekdayRhythm）+ 部位覆盖度（bodyCoverage）
+├── js/exercises.js     # 动作引擎：13 个动作的有效次数状态机 + 纠错规则 + 体态评估（正面 analyzePosture / 侧面 analyzePostureSide / 合并 mergePosture）+ 一句话编排（planFromText）+ 体感关卡逻辑（makeGame）+ 周课表（makeWeekPlan）+ 我的课程模板 + 数据备份（exportPayload/parseImport）+ 训练点与热力图分桶（recPoints/buildHeatmap）+ 成就徽章（computeAchievements）+ 周环比（weekCompare）+ 时段分布（daypartStats）+ 动作最佳榜（personalBests）+ 星期训练节奏（weekdayRhythm）+ 部位覆盖度（bodyCoverage）+ 生涯总览（lifetimeStats）
 ├── js/app.js           # 主应用：摄像头循环、HUD、语音、组/循环/关卡流程、课表卡、回放、海报、报表、额度、教练记忆与复盘
 ├── tests/test_trackers.js  # 引擎回归单测（合成坐标帧 / 合成关卡输入）：node tests/test_trackers.js
 └── docs/PRD.md         # 初版产品需求文档（市场对标 / 功能分级 / 变现）

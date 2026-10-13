@@ -1559,6 +1559,7 @@
 
   /* ---------------- 报告页 ---------------- */
   function renderReport() {
+    renderLifetime();
     renderHeatmap();
     renderAchievements();
     renderDaypart();
@@ -1602,6 +1603,29 @@
         DB.records.slice(0, 40).map(r =>
           '<div class="hist-row"><span>' + fmtDate(r.ts) + '</span><span>' + r.name + (r.mode === 'game' ? ' 🎮' : (r.mode === 'time' ? '（' + r.valid + 's）' : '')) + '</span><b>' + (r.mode === 'game' ? r.valid + ' 分' : r.mode === 'time' ? r.valid + 's' : r.valid + '/' + r.attempts) + '</span><span>' + r.score + '</span><span>' + r.cal + '</span></div>').join('')
       : '<div class="empty-tip">暂无记录，去首页开始第一次训练吧</div>';
+  }
+
+  /* 生涯总览：lifetimeStats 纯逻辑跨全部记录累加，这里只画统计宫格 */
+  function renderLifetime() {
+    const box = $('#lt-grid'); if (!box) return;
+    const lt = X.lifetimeStats(DB.records);
+    const sum = $('#lt-sum');
+    if (!lt.sessions) { box.innerHTML = '<div class="empty-tip">还没有训练记录，练一次这里会累计你的生涯数据</div>'; if (sum) sum.textContent = ''; return; }
+    const dur = s => (s >= 3600 ? Math.floor(s / 3600) + ' 时 ' + Math.round(s % 3600 / 60) + ' 分' : Math.round(s / 60) + ' 分钟');
+    const d2 = ts => { const d = new Date(ts); return (d.getMonth() + 1) + '/' + d.getDate(); };
+    const items = [
+      { k: '总训练', v: lt.sessions + ' 节', tip: '所有训练/关卡/循环的总节数' },
+      { k: '训练点', v: lt.points, tip: '与目标环/热力图同一口径（recPoints）' },
+      { k: '运动时长', v: dur(lt.secs), tip: '累计运动秒数换算' },
+      { k: '消耗热量', v: lt.calories + ' 千卡', tip: '累计估算卡路里' },
+      { k: '活跃天数', v: lt.activeDays + ' 天', tip: '有训练记录的自然日去重' },
+      { k: '涵盖动作', v: lt.distinctEx + '/' + lt.exTotal, tip: '练过的不同动作（关卡/循环不计）' },
+      { k: '坚持跨度', v: lt.months + ' 个月', tip: '首练 ' + (lt.firstTs ? d2(lt.firstTs) : '—') + ' → 最近 ' + (lt.lastTs ? d2(lt.lastTs) : '—'), big: true },
+      { k: '最活跃月', v: lt.busiestMonth ? lt.busiestMonth.label : '—', tip: lt.busiestMonth ? ('该月练了 ' + lt.busiestMonth.sessions + ' 节') : '', big: true }
+    ];
+    box.innerHTML = items.map(it =>
+      '<div class="lt-cell' + (it.big ? ' wide' : '') + '"' + (it.tip ? ' title="' + it.tip + '"' : '') + '><b>' + it.v + '</b><span>' + it.k + '</span></div>').join('');
+    if (sum) sum.textContent = '从 ' + (lt.firstTs ? d2(lt.firstTs) : '') + ' 开始，已累计 ' + lt.sessions + ' 节 ✦';
   }
 
   /* 训练热力图：DOM 网格（每列一周、上到下周一~周日），hover 用 title 提示日期与点数 */

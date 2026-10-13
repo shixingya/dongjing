@@ -329,6 +329,7 @@ h3{font-size:18px}
   .hud-reps b{font-size:60px}
   #main{padding:14px}
   .hero-stats{grid-template-columns:1fr 1fr}
+  .lt-grid{grid-template-columns:1fr 1fr}
 }
 /* 手机竖屏：画幅改为竖向比例，才容得下全身 */
 @media (max-width:900px) and (orientation:portrait){
@@ -412,6 +413,13 @@ h3{font-size:18px}
 .bc-row.gap{opacity:.5}
 .bc-row.gap .bc-main b{color:var(--muted)}
 .bc-row.gap .bc-tag{color:var(--warn)}
+/* ---- v2.8 生涯总览 ---- */
+.lt-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin-top:8px}
+.lt-cell{background:#141d2b; border:1px solid var(--line); border-radius:12px; padding:11px 8px; display:flex; flex-direction:column; gap:3px; align-items:center; text-align:center}
+.lt-cell b{font-size:18px; color:var(--hl); line-height:1.15}
+.lt-cell span{font-size:11.5px; color:var(--muted)}
+.lt-cell.wide{grid-column:span 2}
+.lt-cell.wide b{font-size:15px}
 
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}

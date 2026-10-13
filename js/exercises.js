@@ -1392,12 +1392,45 @@
     };
   }
 
+  /* ================= 生涯总览（v2.8）=================
+   * 跨全部记录累加节数/训练点/卡路里/时长，统计活跃天数/涵盖动作/首末训练日与最活跃的月份。
+   * 点数口径仍复用 recPoints；涵盖动作只数真实动作库（关卡/循环不计）。 */
+  function lifetimeStats(records) {
+    const rs = Array.isArray(records) ? records : [];
+    const exIds = new Set(EXERCISES.map(e => e.id));
+    const ds = t => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); };
+    let sessions = 0, points = 0, calories = 0, secs = 0, firstTs = Infinity, lastTs = 0;
+    const daySet = new Set(), monthAcc = {}, exSeen = new Set();
+    rs.forEach(r => {
+      if (!r || !Number.isFinite(r.ts)) return;
+      sessions++;
+      points += recPoints(r);
+      calories += Number(r.cal) || 0;
+      secs += Number(r.secs) || 0;
+      if (r.ts < firstTs) firstTs = r.ts;
+      if (r.ts > lastTs) lastTs = r.ts;
+      daySet.add(ds(r.ts));
+      if (r.ex && exIds.has(r.ex)) exSeen.add(r.ex);
+      const d = new Date(r.ts), mk = d.getFullYear() + '-' + d.getMonth();
+      monthAcc[mk] = (monthAcc[mk] || 0) + 1;
+    });
+    let bmKey = null, bmN = 0;
+    Object.keys(monthAcc).forEach(k => { if (monthAcc[k] > bmN) { bmN = monthAcc[k]; bmKey = k; } });
+    let busiestMonth = null;
+    if (bmKey) { const p = bmKey.split('-'); busiestMonth = { y: +p[0], m: +p[1], sessions: bmN, label: p[0] + '年' + (+p[1] + 1) + '月' }; }
+    return {
+      sessions, points, calories: Math.round(calories), secs: Math.round(secs),
+      activeDays: daySet.size, distinctEx: exSeen.size, exTotal: EXERCISES.length,
+      firstTs: sessions ? firstTs : 0, lastTs, months: Object.keys(monthAcc).length, busiestMonth
+    };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,
