@@ -131,6 +131,8 @@
 
 - ✅ **v3.1 已交付（表现走势：“你的动作质量在进还是在退”）**：① `scoreTrend(records)` 纯函数—只取 `Number.isFinite(ts) && Number.isFinite(score) && score>0` 的记录按 ts 升序，等分成最多 `SCORE_TREND_MAX_SEG=5` 段（余数分给前段，逐段 `{i,n,avg,fromTs,toTs}`），返回 `{enough,n,segments,firstAvg,lastAvg,overallAvg,delta,trend,bestAvg,bestIdx}`；② **三种走势判定**：`delta=lastAvg-firstAvg`，≥+5 为 up（质量提升）、≤-5 为 down（质量下滑）、其余 flat；bestIdx 标记均分最高的一段；③ **与已有卡正交**（issueTrend 看问题频率轨迹、weekCompare 比训练量点数，本卡看总体评分质量轨迹）；只看有评分记录、不足 2 条/null 不崩；④ 渲染为一列竖向迷你柱（高=avg/最大 avg）、最高段加 best、末段按 up/down 加绿/橙，hover 看该段节数与日历区间，副标题“共 N 节有评分 · 均分 X · <走势结论>”；⑤ 单测覆盖空/null/1 条 enough=false、无 score/score<=0/非有限 ts 过滤、乱序传入验证排序与 5 段划分（first15/last95/delta80/up/overall53/bestIdx4）、首段含余数、down/flat 两路；浏览器冒烟注入 8 节递升评分（50→95），DOM 5 段 val=[53,63,80,90,95]、末段 best+last+up、副标题“共 8 节有评分 · 均分 72 · 动作质量在稳步提升 ↑”与 `DJX.scoreTrend` 逐段零偏差、0 console error。
 
+- ✅ **v3.2 已交付（训练节奏：你是高频规律还是随缘型）**：① `trainingCadence(records, {today})` 纯函数—把有合法 ts 的记录归一到自然日去重、升序，逐相邻活跃日算间隔天数，返回 `{activeDays,gapCount,avgGap,longestGap,daysSinceLast,perWeek,rhythm,totalSpan}`；② **节奏三档**：`avgGap<=2` → steady（高频规律）、`<=4` → regular（隔天一练）、否则 casual（随缘型）；perWeek=7/avgGap 折算每周训练天数；③ **today 驱动 daysSinceLast**（上一次训练离今天几天，同日多条去重不拆天），与热力图“最长连续”不同视角（本卡看节奏均匀度）；不足 2 个活跃日/非法 ts/null 不崩；④ 渲染四格指标宫格（平均间隔/每周频次/最长空档/距上次）+ 徽章式节奏定性（steady 绿/casual 橙），hover 看每项口径；⑤ 单测覆盖空/null/new、连续 6 天 steady/perWeek7/距 1 天、每 3 天 regular/天数命中今天、隔 10 天 casual/longest10、同日多条去重为 1 活跃日、非有限 ts 丢弃；浏览器冒烟注入“每 2 天一练共 7 个活跃日且今天练”，DOM 四格 2 天/3.5 次周/2 天/今天、徽章“高频规律”good、副标题“共 7 个训练日”与 `DJX.trainingCadence` 逐项零偏差、0 console error。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；

@@ -453,6 +453,15 @@ h3{font-size:18px}
 .st-verdict{font-weight:700}
 .st-verdict.up{color:var(--hl)}
 .st-verdict.down{color:var(--warn)}
+/* ---- v3.2 训练节奏 ---- */
+.tc-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin-top:8px}
+.tc-cell{background:#141d2b; border:1px solid var(--line); border-radius:12px; padding:11px 8px; display:flex; flex-direction:column; gap:3px; align-items:center; text-align:center}
+.tc-cell b{font-size:17px; color:var(--hl2); line-height:1.15}
+.tc-cell span{font-size:11.5px; color:var(--muted)}
+.tc-badge{font-weight:700; color:var(--txt)}
+.tc-badge.good{color:var(--hl)}
+.tc-badge.warn{color:var(--warn)}
+@media (max-width:900px){ .tc-grid{grid-template-columns:1fr 1fr} }
 
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}

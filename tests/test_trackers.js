@@ -1124,4 +1124,39 @@ function mkHand(tipDist) {
   console.log('[st] 全部断言通过');
 }
 
+/* ================= v3.2 训练节奏 trainingCadence ================= */
+{
+  const fail = m => { console.log('[tc] FAIL:', m); process.exit(1); };
+  const D = 864e5, t0 = new Date('2026-10-01T12:00:00').getTime();
+  const mk = days => days.map(i => ({ ts: t0 + i * D, mode: 'reps', valid: 5 }));
+
+  /* 空 / null → activeDays 0、rhythm new、daysSinceLast null */
+  const e = X.trainingCadence([], { today: t0 });
+  if (e.activeDays !== 0 || e.rhythm !== 'new' || e.daysSinceLast !== null) fail('空数据应 activeDays0/new/null');
+  if (X.trainingCadence(null, { today: t0 }).activeDays !== 0) fail('null 应不崩');
+
+  /* 连续 6 天 → avgGap1/longest1/steady/perWeek7，今日未练 daysSinceLast1 */
+  const daily = X.trainingCadence(mk([0, 1, 2, 3, 4, 5]), { today: t0 + 6 * D });
+  if (daily.activeDays !== 6 || daily.gapCount !== 5 || daily.avgGap !== 1 || daily.longestGap !== 1) fail('连续 6 天结构 实际 ' + JSON.stringify(daily));
+  if (daily.rhythm !== 'steady' || daily.perWeek !== 7 || daily.daysSinceLast !== 1) fail('steady/perWeek7/距1天 实际 ' + daily.rhythm + '/' + daily.perWeek + '/' + daily.daysSinceLast);
+
+  /* 隔天训（每 3 天一节）→ avgGap3/regular，最后一天就是今天 daysSinceLast0 */
+  const every3 = X.trainingCadence(mk([0, 3, 6, 9]), { today: t0 + 9 * D });
+  if (every3.activeDays !== 4 || every3.avgGap !== 3 || every3.longestGap !== 3 || every3.rhythm !== 'regular' || every3.daysSinceLast !== 0) fail('每3天 regular 实际 ' + JSON.stringify(every3));
+
+  /* 大空档（2 天隔 10 天）→ casual/longestGap10 */
+  const casual = X.trainingCadence(mk([0, 10]), { today: t0 + 20 * D });
+  if (casual.rhythm !== 'casual' || casual.longestGap !== 10 || casual.avgGap !== 10) fail('隔10天 casual 实际 ' + casual.rhythm + '/' + casual.longestGap);
+
+  /* 同日多条去重为 1 个活跃日 */
+  const same = X.trainingCadence([{ ts: t0 + 100, mode: 'reps', valid: 5 }, { ts: t0 + 2000, mode: 'reps', valid: 3 }, { ts: t0 + 5000, mode: 'time', valid: 30 }], { today: t0 });
+  if (same.activeDays !== 1 || same.gapCount !== 0 || same.totalSpan !== 0) fail('同日多条应归 1 活跃日 实际 ' + JSON.stringify(same));
+
+  /* 非有限 ts 丢弃 */
+  const dirty = X.trainingCadence([null, { ts: NaN }, { mode: 'reps', valid: 5 }, { ts: t0 + 2 * D, mode: 'reps', valid: 5 }], { today: t0 + 2 * D });
+  if (dirty.activeDays !== 1) fail('非法记录应丢弃只剩 1 活跃日 实际 ' + dirty.activeDays);
+
+  console.log('[tc] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

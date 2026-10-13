@@ -1569,6 +1569,7 @@
     renderIssueTrend();
     renderMode();
     renderScoreTrend();
+    renderCadence();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1789,6 +1790,24 @@
     }).join('') + '</div>';
     const v = VERDICT[st.trend];
     if (sum) sum.innerHTML = '共 ' + st.n + ' 节有评分 · 均分 ' + st.overallAvg + ' · <span class="st-verdict ' + v.c + '">' + v.t + '</span>';
+  }
+
+  /* 训练节奏：trainingCadence 纯逻辑算平均间隔/最长空档/每周频次，这里只画四个指标 + 节奏徽章 */
+  function renderCadence() {
+    const box = $('#tc-grid'); if (!box) return;
+    const sum = $('#tc-sum');
+    const tc = X.trainingCadence(DB.records, { today: Date.now() });
+    if (tc.activeDays < 2) { box.innerHTML = '<div class="empty-tip">至少在不同两天练过，才能算出你的训练节奏</div>'; if (sum) sum.textContent = ''; return; }
+    const RHYTHM = { steady: { t: '高频规律', c: 'good' }, regular: { t: '隔天一练', c: '' }, casual: { t: '随缘型', c: 'warn' }, new: { t: '刚起步', c: '' } };
+    const items = [
+      { k: '平均间隔', v: tc.avgGap + ' 天', tip: '相邻训练日之间平均隔了几天' },
+      { k: '每周频次', v: tc.perWeek + ' 次/周', tip: '按平均间隔折算的每周训练天数' },
+      { k: '最长空档', v: tc.longestGap + ' 天', tip: '最久一次连续没练的天数' },
+      { k: '距上次', v: tc.daysSinceLast === 0 ? '今天' : (tc.daysSinceLast + ' 天前'), tip: '上一次训练离今天多久' }
+    ];
+    box.innerHTML = items.map(x => '<div class="tc-cell" title="' + x.tip + '"><b>' + x.v + '</b><span>' + x.k + '</span></div>').join('');
+    const r = RHYTHM[tc.rhythm] || RHYTHM.new;
+    if (sum) sum.innerHTML = '<span class="tc-badge ' + r.c + '">' + r.t + '</span> · 共 ' + tc.activeDays + ' 个训练日';
   }
 
   /* ---------------- 我的 / Pro ---------------- */

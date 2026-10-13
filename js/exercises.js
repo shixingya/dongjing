@@ -1518,12 +1518,37 @@
     return { enough: true, n, segments, firstAvg, lastAvg, overallAvg, delta, trend, bestAvg: best.avg, bestIdx: best.i };
   }
 
+  /* ================= 训练节奏（v3.2）=================
+   * 把活跃自然日按时间排序，看相邻训练日隔了几天：平均间隔、最长空档、
+   * 距今几天没练、折算每周频次，判你是“高频规律 / 隔天一练 / 随缘型”。
+   * 与热力图的“连续打卡”不同视角：那个看最长连续，这个看整体节奏均匀度。 */
+  const DAYMS = 864e5;
+  function trainingCadence(records, opts) {
+    const o = opts || {};
+    const now = Number(o.today) || Date.now();
+    const rs = (Array.isArray(records) ? records : []).filter(r => r && Number.isFinite(r.ts));
+    const ds = t => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); };
+    const daySet = new Set(rs.map(r => ds(r.ts)));
+    const days = [...daySet].sort((a, b) => a - b);
+    const activeDays = days.length;
+    const gaps = [];
+    for (let i = 1; i < days.length; i++) gaps.push(Math.round((days[i] - days[i - 1]) / DAYMS));
+    const totalSpan = activeDays > 1 ? Math.round((days[activeDays - 1] - days[0]) / DAYMS) : 0;
+    const avgGap = gaps.length ? Math.round(totalSpan / gaps.length * 10) / 10 : 0;
+    let longestGap = 0; gaps.forEach(g => { if (g > longestGap) longestGap = g; });
+    const daysSinceLast = activeDays ? Math.round((ds(now) - days[activeDays - 1]) / DAYMS) : null;
+    const perWeek = avgGap > 0 ? Math.round(7 / avgGap * 10) / 10 : 0;
+    let rhythm = 'new';
+    if (activeDays >= 2) { if (avgGap <= 2) rhythm = 'steady'; else if (avgGap <= 4) rhythm = 'regular'; else rhythm = 'casual'; }
+    return { activeDays, gapCount: gaps.length, avgGap, longestGap, daysSinceLast, perWeek, rhythm, totalSpan };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,
