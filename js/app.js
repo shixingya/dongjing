@@ -144,6 +144,8 @@
     if (g) { go(g.dataset.go); return; }
     const exb = e.target.closest('[data-ex]');
     if (exb) openTrain(exb.dataset.ex);
+    const chip = e.target.closest('.rep-chip');
+    if (chip) { const t = document.querySelector(chip.dataset.target); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   });
 
   function refreshChip() {
@@ -1558,7 +1560,20 @@
   }
 
   /* ---------------- 报告页 ---------------- */
+  /* 报告页锚点导航：15 张卡一眼滚不到底，顶部 chips 一键滚到对应卡（纯 UI，无新口径） */
+  const REPORT_NAV = [
+    { t: '本周', s: '.rep-grid' }, { t: '生涯', s: '.lt-card' }, { t: '热力', s: '.hm-card' },
+    { t: '成就', s: '.ach-card' }, { t: '时段', s: '.dp-card' }, { t: '最佳', s: '.pb-card' },
+    { t: '星期', s: '.wd-card' }, { t: '部位', s: '.bc-card' }, { t: '纠错', s: '.it-card' },
+    { t: '构成', s: '.ms-card' }, { t: '走势', s: '.st-card' }, { t: '节奏', s: '.tc-card' },
+    { t: '时长', s: '.sd-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
+  ];
+  function renderRepNav() {
+    const nav = $('#rep-nav'); if (!nav) return;
+    nav.innerHTML = REPORT_NAV.map(n => '<button type="button" class="rep-chip" data-target="' + n.s + '">' + n.t + '</button>').join('');
+  }
   function renderReport() {
+    renderRepNav();
     renderLifetime();
     renderHeatmap();
     renderAchievements();

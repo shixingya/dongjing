@@ -135,6 +135,8 @@
 
 - ✅ **v3.3 已交付（时长画像：你典型一节课练多久）**：① `sessionDuration(records)` 纯函数—只取有限 ts + 有限 secs 且 `secs>0` 的记录，累加 `{count,totalSecs,avgSecs,longest,shortest}`，并按 `DUR_BUCKETS` 四个区间（3 分内 / 3–8 分 / 8–15 分 / 15 分以上，边界 180/480/900 秒）分桶，逐桶 `{key,name,count,pct}`，typicalKey 取节数最多的一桶；② **与生涯总览互补**（lifetimeStats 给累计总时长、本函数给单次时长的分布），secs<=0/无 secs/非有限 ts/null 均排除不崩；③ 渲染四行横向条（宽=count/max）、典型桶加 best 高亮、右侧显节数，副标题“平均每节 X 分钟 · 常见「X」· 最长 X 分钟”（时长自动换算分钟/小时）；④ 单测覆盖空/null count0、混合时长（60/120→短、300→中、600→长、1000→超长，count5/total2080/avg416/longest1000/shortest60/分桶2-1-1-1/pct40/typical s）、无 secs/secs<=0/非有限 ts 排除、单一区间；浏览器冒烟注入 5 节（60/120/300/600/1000 秒），DOM 4 行 num=[2,1,1,1]、首行 best、副标题“平均每节 7 分钟 · 常见「3 分内」· 最长 17 分钟”与 `DJX.sessionDuration` 逐项零偏差、0 console error。
 
+- ✅ **v3.4 已交付（报告页锚点导航：15 张卡一眼定位、一点直达）**：① 报告页累积到 15 张卡（本周/生涯/热力/成就/时段/最佳/星期/部位/纠错/构成/走势/节奏/时长/体态/历史），纯 UI 迭代不新增报表——顶部加横向可换行的 `#rep-nav` chips，点任一枚 `scrollIntoView({behavior:'smooth'})` 滚到对应卡；② `REPORT_NAV` 表驱动（15 项 `{t,label,selector}`），渲染层只按表画 chips，卡片类名（`.lt-card/.hm-card/…/.pst-card/.hist-card`）成为导航锚点契约，后续增删卡片只改这张表；③ **点击走既有事件委托**（`.rep-chip` 与 `[data-go]`/`[data-ex]` 同一 handler），target 不存在时静默不崩；④ 冒烟验证 15 枚 chips 全部解析到真实 DOM 节点、逐一点击 0 抛错 0 console error；自检脚本 id_refs=167、nav_selectors=15 全部命中。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；

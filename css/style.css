@@ -472,6 +472,11 @@ h3{font-size:18px}
 .sd-row.best .sd-name{color:var(--hl); font-weight:700}
 .sd-row.best .sd-bar i{background:var(--hl)}
 .sd-row.best .sd-num{color:var(--hl)}
+/* ---- v3.4 报告页锚点导航 ---- */
+.rep-nav{display:flex; flex-wrap:wrap; gap:6px; padding:2px 0 4px; margin-bottom:10px}
+.rep-chip{background:#141d2b; border:1px solid var(--line); color:var(--muted); font-size:12.5px; padding:5px 12px; border-radius:999px; cursor:pointer; white-space:nowrap; transition:.15s}
+.rep-chip:hover{color:var(--txt); border-color:var(--hl2)}
+.rep-chip:active{color:var(--hl); border-color:var(--hl)}
 
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}
