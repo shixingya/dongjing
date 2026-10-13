@@ -1562,6 +1562,7 @@
     renderHeatmap();
     renderAchievements();
     renderDaypart();
+    renderBests();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1654,6 +1655,21 @@
     }).join('');
     const sum = $('#dp-sum');
     if (sum) sum.textContent = '你最常在 ' + dp.busiestName + '训练（共 ' + dp.total + ' 节）';
+  }
+
+  /* 动作最佳榜：personalBests 纯逻辑按动作聚合单次最佳/节数/均分，这里只列表 */
+  function renderBests() {
+    const box = $('#pb-list'); if (!box) return;
+    const pb = X.personalBests(DB.records);
+    if (!pb.length) { box.innerHTML = '<div class="empty-tip">还没有动作记录，练几个动作这里会列出你的最佳</div>'; const s0 = $('#pb-sum'); if (s0) s0.textContent = ''; return; }
+    const fmtBest = e => !e.best ? '—' : (e.mode === 'time' ? '最久 ' + e.best + ' 秒' : '最多 ' + e.best + ' 次');
+    box.innerHTML = pb.map(e =>
+      '<div class="pb-row" title="' + e.name + ' · 练过 ' + e.sessions + ' 次 · 平均评分 ' + e.avgScore + (e.last ? ' · 最近 ' + fmtDate(e.last) : '') + '">' +
+      '<span class="pb-ico">' + e.ico + '</span>' +
+      '<div class="pb-main"><b>' + e.name + '</b><span class="pb-sub">练 ' + e.sessions + ' 次 · 均分 ' + e.avgScore + '</span></div>' +
+      '<span class="pb-best">' + fmtBest(e) + '</span></div>').join('');
+    const sum = $('#pb-sum');
+    if (sum) sum.textContent = '共 ' + pb.length + ' 个动作有成绩';
   }
 
   /* ---------------- 我的 / Pro ---------------- */

@@ -1292,12 +1292,41 @@
     return { parts, total, busiestKey: total ? busiest.key : null, busiestName: total ? busiest.name : '' };
   }
 
+  /* ================= 动作个人最佳榜（v2.5）=================
+   * 按动作聚合训练节数 / 单次最佳成绩（计次取最多下、计时取最长秒、
+   * 关卡取最高分）/ 平均评分 / 累计点数 / 最近一次，按节数降序。 */
+  function personalBests(records) {
+    const rs = Array.isArray(records) ? records : [];
+    const meta = {};
+    EXERCISES.forEach(e => { meta[e.id] = e; });
+    const byId = {};
+    rs.forEach(r => {
+      if (!r || !r.ex || !meta[r.ex]) return;
+      const e = byId[r.ex] || (byId[r.ex] = { id: r.ex, sessions: 0, best: 0, bestScore: 0, scoreSum: 0, total: 0, points: 0, last: 0 });
+      e.sessions++;
+      const v = Number(r.valid) || 0;
+      if (v > e.best) e.best = v;                       // reps → 次数 / time → 秒 / game → 得分
+      e.total += v;
+      const sc = Number(r.score) || 0;
+      if (sc > e.bestScore) e.bestScore = sc;
+      e.scoreSum += sc;
+      e.points += recPoints(r);
+      if (Number.isFinite(r.ts) && r.ts > e.last) e.last = r.ts;
+    });
+    return Object.keys(byId).map(id => {
+      const e = byId[id], m = meta[id];
+      return { id, name: m.name, ico: m.ico, mode: m.mode, target: m.target,
+        sessions: e.sessions, best: e.best, bestScore: e.bestScore, total: e.total, points: e.points,
+        avgScore: e.sessions ? Math.round(e.scoreSum / e.sessions) : 0, last: e.last };
+    }).sort((a, b) => b.sessions - a.sessions || b.points - a.points);
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

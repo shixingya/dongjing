@@ -849,4 +849,44 @@ function mkHand(tipDist) {
   console.log('[dp] 全部断言通过');
 }
 
+/* ================= v2.5 动作个人最佳榜 personalBests ================= */
+{
+  const fail = m => { console.log('[pb] FAIL:', m); process.exit(1); };
+  const byId = list => { const o = {}; list.forEach(x => o[x.id] = x); return o; };
+
+  /* 空数据 */
+  if (X.personalBests([]).length !== 0) fail('空数据应为空数组');
+
+  /* 混合：同一动作多节 + time + 非动作 id 忽规 + 非法记录丢弃 */
+  const recs = [
+    null,                                                                     // 丢弃
+    { ts: 1, ex: 'squat', mode: 'reps', valid: 15, score: 90 },
+    { ts: 5, ex: 'squat', mode: 'reps', valid: 20, score: 70 },
+    { ts: 2, ex: 'plank', mode: 'time', valid: 60, score: 85 },
+    { ts: 3, ex: 'game-collect', mode: 'game', valid: 30, score: 60 },         // 非真动作 id，忽规
+    { ex: 'lunge', mode: 'reps', valid: 8 }                                    // 无 ts：仍入榜，last 保持 0
+  ];
+  const pb = byId(X.personalBests(recs));
+  if (Object.keys(pb).length !== 3) fail('应只统计 squat/plank/lunge 三个真动作, 实际 ' + Object.keys(pb).length);
+  if (pb['game-collect']) fail('game-collect 不应入榜');
+  if (pb.squat.best !== 20) fail('squat best 应为 20 实际 ' + pb.squat.best);
+  if (pb.squat.bestScore !== 90) fail('squat bestScore 应为 90');
+  if (pb.squat.total !== 35) fail('squat total 期望 35(15+20) 实际 ' + pb.squat.total);
+  if (pb.squat.last !== 5) fail('squat last 应为最大 ts=5 实际 ' + pb.squat.last);
+  if (pb.squat.avgScore !== 80) fail('squat 均分期望 80(90+70)/2 实际 ' + pb.squat.avgScore);
+  if (pb.squat.name !== '深蹲' || pb.squat.mode !== 'reps') fail('squat 元数据应回填 name/mode');
+  /* plank: time valid 60 → best 60 秒, points 6 */
+  if (pb.plank.best !== 60) fail('plank best 应为 60 秒');
+  if (pb.plank.points !== 6) fail('plank points 期望 6(60/10) 实际 ' + pb.plank.points);
+  /* lunge 无 ts：sessions 1、last 0 */
+  if (pb.lunge.sessions !== 1 || pb.lunge.last !== 0) fail('lunge 无 ts：sessions 1、last 0');
+
+  /* 排序：节数降序，平手按点数。squat(2 节) 排首位 */
+  const sorted = X.personalBests(recs);
+  if (sorted[0].id !== 'squat') fail('squat 节数应最多排首位, 实际 ' + sorted[0].id);
+
+  console.log('[pb] squat sessions=' + pb.squat.sessions + ' avg=' + pb.squat.avgScore + ' total=' + pb.squat.total);
+  console.log('[pb] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');
