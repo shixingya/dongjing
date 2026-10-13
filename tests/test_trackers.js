@@ -1229,4 +1229,47 @@ function mkHand(tipDist) {
   console.log('[is] 全部断言通过');
 }
 
+/* ================= v3.7 每日目标达成画像 goalProfile ================= */
+{
+  const fail = m => { console.log('[gp] FAIL:', m); process.exit(1); };
+  const D = 864e5;
+  const T = new Date(2026, 9, 13, 10).getTime();   // 今天本地时间戳（带时分）
+  const TS = new Date(2026, 9, 13).getTime();      // 今天零点
+
+  /* 空数据：30 天窗口、达标 0；null 不崩 */
+  const e = X.goalProfile([], { today: T, dailyGoal: 20 });
+  if (e.span !== 30 || e.window.length !== 30 || e.hit !== 0 || e.hitRate !== 0 || e.curHitStreak !== 0) fail('空数据应 hit0/window30');
+  if (e.window[29].ts !== TS) fail('窗口末格应是今天零点');
+  if (X.goalProfile(null, {}).span !== 30) fail('null 应不崩');
+
+  /* span 限幅：100→60、3→7 */
+  if (X.goalProfile([], { today: T, days: 100 }).span !== 60) fail('days 上限钳 60');
+  if (X.goalProfile([], { today: T, days: 3 }).span !== 7) fail('days 下限钳 7');
+
+  /* 目标 20：4天前30✓ 3天前25✓ 2天前22✓ 1天前5✗ 今天40✓ */
+  const mk = (day, valid) => ({ ts: TS - day * D + 36e5, mode: 'reps', valid });
+  const g = X.goalProfile([mk(4, 30), mk(3, 25), mk(2, 22), mk(1, 5), mk(0, 40)], { today: T, dailyGoal: 20, days: 14 });
+  if (g.hit !== 4) fail('应达标 4 天 实际 ' + g.hit);
+  if (g.longestHitStreak !== 3) fail('最长连达 3 实际 ' + g.longestHitStreak);
+  if (g.curHitStreak !== 1) fail('今天单独达标（昨天断链）cur 应 1 实际 ' + g.curHitStreak);
+  if (g.practiced !== 5 || g.activeRate !== Math.round(5 / 14 * 100)) fail('练了 5 天/活跃率 36');
+  if (g.bestPoints !== 40) fail('峰值 40 实际 ' + g.bestPoints);
+
+  /* 今天未达标时 cur 从昨天起算（与热力图 streak 同口径） */
+  const g2 = X.goalProfile([mk(3, 30), mk(2, 25), mk(1, 21), mk(0, 5)], { today: T, dailyGoal: 20, days: 14 });
+  if (g2.curHitStreak !== 3) fail('今天未达应从昨天起算：1/2/3 天前均达→cur3 实际 ' + g2.curHitStreak);
+
+  /* 同日多条先累加点数再判达标 */
+  const g3 = X.goalProfile([mk(0, 12), { ts: TS + 72e5, mode: 'reps', valid: 9 }, mk(5, 100)], { today: T, dailyGoal: 20 });
+  if (g3.window[29].points !== 21) fail('今天两条 12+9=21 点 实际 ' + g3.window[29].points);
+  if (g3.hit !== 2) fail('今天(21)与 5 天前(100)均达→hit2 实际 ' + g3.hit);
+
+  /* 未设目标：不计达标但均点/峰值照算 */
+  const g4 = X.goalProfile([mk(0, 15)], { today: T, dailyGoal: 0, days: 30 });
+  if (g4.hit !== 0 || g4.hitRate !== 0 || g4.longestHitStreak !== 0) fail('goal<=0 不应计达标');
+  if (g4.bestPoints !== 15 || g4.avgPoints !== 1) fail('峰值 15/均点 round(15/30)=1 实际 ' + g4.bestPoints + '/' + g4.avgPoints);
+
+  console.log('[gp] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

@@ -487,6 +487,16 @@ h3{font-size:18px}
 .im-delta{font-size:12.5px; font-weight:700; text-align:right}
 .im-delta.good{color:var(--hl)}
 .im-delta.warn{color:#f0a35e}
+/* ---- v3.7 每日目标达成画像 ---- */
+.gp-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:9px; margin-top:8px}
+.gp-cell{background:#141d2b; border:1px solid var(--line); border-radius:12px; padding:11px 8px; display:flex; flex-direction:column; gap:3px; align-items:center; text-align:center}
+.gp-cell b{font-size:17px; color:var(--hl2); line-height:1.15}
+.gp-cell span{font-size:11.5px; color:var(--muted)}
+.gp-dots{display:flex; flex-wrap:wrap; gap:4px; margin-top:10px}
+.gp-dot{width:15px; height:15px; border-radius:4px; background:#1a2434; border:1px solid var(--line)}
+.gp-dot.part{background:#274234; border-color:#33574a}
+.gp-dot.hit{background:var(--hl); border-color:var(--hl)}
+@media (max-width:900px){ .gp-grid{grid-template-columns:1fr 1fr} }
 
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}

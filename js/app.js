@@ -1566,7 +1566,7 @@
     { t: '成就', s: '.ach-card' }, { t: '时段', s: '.dp-card' }, { t: '最佳', s: '.pb-card' },
     { t: '星期', s: '.wd-card' }, { t: '部位', s: '.bc-card' }, { t: '纠错', s: '.it-card' },
     { t: '构成', s: '.ms-card' }, { t: '走势', s: '.st-card' }, { t: '节奏', s: '.tc-card' },
-    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
+    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
   ];
   function renderRepNav() {
     const nav = $('#rep-nav'); if (!nav) return;
@@ -1604,6 +1604,7 @@
     renderCadence();
     renderDuration();
     renderImprovement();
+    renderGoal();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1879,6 +1880,25 @@
         '<span class="im-delta ' + s.c + '">' + dt + ' ' + s.t + '</span></div>';
     }).join('');
     if (sum) sum.textContent = '共 ' + im.count + ' 个动作可对比 · ' + im.improved + ' 项在进步';
+  }
+
+  /* 目标达成：goalProfile 纯逻辑算近 30 天达标天数/连达，这里只画四格指标 + 30 天达标小点 */
+  function renderGoal() {
+    const box = $('#gp-grid'); if (!box) return;
+    const sum = $('#gp-sum');
+    const goal = DB.set.dailyGoal | 0;
+    if (goal <= 0) { box.innerHTML = '<div class="empty-tip">先在“我的”里设一个每日目标点数，这里就能看你近 30 天真正达标了几天</div>'; if (sum) sum.textContent = ''; return; }
+    const gp = X.goalProfile(DB.records, { today: Date.now(), dailyGoal: goal, days: 30 });
+    const items = [
+      { k: '达标天数', v: gp.hit + ' / ' + gp.span, tip: '近 ' + gp.span + ' 天达到每日目标（' + goal + ' 点）的天数，达标率 ' + gp.hitRate + '%' },
+      { k: '当前连达', v: gp.curHitStreak + ' 天', tip: '连续达标天数；今天未达标则从昨天起算（与热力图同口径）' },
+      { k: '最长连达', v: gp.longestHitStreak + ' 天', tip: '窗口内最长连续达标' },
+      { k: '日均点数', v: gp.avgPoints, tip: '近 ' + gp.span + ' 天平均每天训练点（含休息日）· 峰值单日 ' + gp.bestPoints + ' 点' }
+    ];
+    box.innerHTML = items.map(x => '<div class="gp-cell" title="' + x.tip + '"><b>' + x.v + '</b><span>' + x.k + '</span></div>').join('');
+    const dots = $('#gp-dots');
+    if (dots) dots.innerHTML = gp.window.map(d => '<i class="gp-dot' + (d.hit ? ' hit' : d.points > 0 ? ' part' : '') + '" title="' + fmtDate(d.ts) + ' · ' + d.points + ' 点' + (d.hit ? ' ✓ 达标' : '') + '"></i>').join('');
+    if (sum) sum.textContent = '目标 ' + goal + ' 点/天 · 近 30 天达标率 ' + gp.hitRate + '%';
   }
 
   /* ---------------- 我的 / Pro ---------------- */

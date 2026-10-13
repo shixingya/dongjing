@@ -1598,12 +1598,48 @@
       declined: items.filter(i => i.status === 'down').length };
   }
 
+  /* ================= 每日目标达成画像（v3.7）=================
+   * 热力图看“练没练”的绝对分档，这里只回答一个问题：对着你设的每日目标，
+   * 近 N 天达标了几天、最长连达几天。点数口径继续复用 recPoints（与目标环/热力图一套）。
+   * 未设目标（goal<=0）时不算达标率，只给窗口内均点/峰值供 UI 提示去设目标。 */
+  function goalProfile(records, opts) {
+    const o = opts || {};
+    const ds = t => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); };
+    const D = 864e5;
+    const now = Number(o.today) || Date.now();
+    const goal = Math.max(0, o.dailyGoal | 0);
+    const span = Math.max(7, Math.min(60, (o.days || 30) | 0));
+    const ptsByDay = {};
+    (Array.isArray(records) ? records : []).forEach(r => {
+      if (!r || !Number.isFinite(r.ts)) return;
+      const k = ds(r.ts); ptsByDay[k] = (ptsByDay[k] || 0) + recPoints(r);
+    });
+    const todayS = ds(now);
+    const win = [];
+    for (let i = span - 1; i >= 0; i--) {
+      const ts = todayS - i * D;
+      const points = Math.round(ptsByDay[ts] || 0);
+      win.push({ ts, points, hit: goal > 0 && points >= goal });
+    }
+    let practiced = 0, hit = 0, sum = 0, bestPoints = 0;
+    win.forEach(d => { if (d.points > 0) practiced++; if (d.hit) hit++; sum += d.points; if (d.points > bestPoints) bestPoints = d.points; });
+    let longest = 0, run = 0;
+    win.forEach(d => { run = d.hit ? run + 1 : 0; if (run > longest) longest = run; });
+    /* 当前连达：今天未达标则从昨天起算（与热力图 streak 同一口径） */
+    let cur = 0;
+    for (let i = win.length - 1; i >= 0; i--) { if (win[i].hit) cur++; else if (i === win.length - 1) continue; else break; }
+    return { goal, span, window: win, practiced, hit,
+      hitRate: Math.round(hit / span * 100), activeRate: Math.round(practiced / span * 100),
+      longestHitStreak: longest, curHitStreak: cur,
+      avgPoints: Math.round(sum / span), bestPoints };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

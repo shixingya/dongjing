@@ -141,6 +141,8 @@
 
 - ✅ **v3.6 已交付（报告页导航跟随高亮：一眼知道滚到哪张卡了）**：纯 UI 迭代不新增报表与数据口径——给 v3.4 的锚点 chips 加 scrollspy：① `repSpy()` 遵 REPORT_NAV 表序遍历各卡 `getBoundingClientRect().top`，把“顶边探进顶部 130px 内”的最后一张卡对应 chip 加 `.on` 高亮（只亮一枚）；② **时间节流而非 rAF**——初版用 `requestAnimationFrame` 节流，无头/后台标签页 rAF 不执行会令高亮永远卡死（冒烟实测），改 80ms 时间片直接执行，渲染循环冻结时仍能工作；③ **与点击跳转共用一套逻辑**：点 chip `scrollIntoView` 平滑滚动触发 scroll 事件、高亮随之跟移；`renderReport()` 末尾再同步一次（chip 刚重建需立即定当前）；④ 冒烟逐位置验证：顶部→本周、.im-card→提升、.hist-card→历史、回顶→本周均高亮正确、同时仅一枚带 `.on`、往返页面不报错、0 console error（后台标签页 dispatch scroll 后时间节流路径实走）。
 
+- ✅ **v3.7 已交付（每日目标达成画像：对着目标线算一笔账，近 30 天真达标了几天）**：① `goalProfile(records, {today, dailyGoal, days})` 纯函数—把有合法 ts 的记录用 `recPoints` 按自然日累加训练点，在滑动窗口（默认 30 天、限幅 7–60）逐日判 `hit = points>=goal`，返回 `{goal,span,window[{ts,points,hit}],practiced,hit,hitRate,activeRate,longestHitStreak,curHitStreak,avgPoints,bestPoints}`；② **与热力图互补不重叠**（热力图按绝对分档/目标百分比看“练没练”，本函数专门对目标线算达标率与连达）；**今天未达标则当前连达从昨天起算**，与热力图 streak 严格同口径；同日多条先累加再判达；③ **未设目标（goal<=0）不算达标率**（hit/hitRate/连达全 0）但照给窗口均点与峰值，UI 直接提示去“我的”设目标而不是瞎画；④ 渲染四格指标宫格（达标天数 X/30、当前连达、最长连达、日均点数）+ 30 枚每日小点（hit 绿/part 暗绿/空灰）hover 看当天日期与点数，副标题“目标 N 点/天 · 近 30 天达标率 X%”；导航 chips 增至 17 枚（新增「目标」）；⑤ 单测覆盖空/null、span 限幅两侧、达标/断链组合（hit4/longest3/cur1）、今天未达从昨天起算 cur3、同日多条累加后判达、goal<=0 分支；浏览器冒烟设 dailyGoal=20 注入“4/3/2 天前均达、昨天 5 点未达、今天 40 点”，DOM 四格/30 小点（4 hit + 1 part + 25 空）/副标题与 `DJX.goalProfile` 逐项零偏差（19/19 PASS）、chipCount=17、0 console error。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；
