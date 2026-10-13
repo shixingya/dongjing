@@ -616,4 +616,58 @@ function mkHand(tipDist) {
   console.log('[tpl] 全部断言通过');
 }
 
+/* --- v2.0 数据备份：exportPayload / sanitizeRecords / mergeRecords / parseImport --- */
+{
+  /* exportPayload：只导白名单字段 + set 补默认 */
+  const db = {
+    records: [{ ts: 1000, ex: 'squat', name: '深蹲', mode: 'reps', target: 10, valid: 8, attempts: 10, secs: 60, cal: 5.43, score: 80, issues: { sqShallow: 2 } }],
+    posture: [], quota: { month: '2026-10', used: 3 }, set: { voice: false }, pro: true,
+    templates: [{ id: 't1', name: '课', ids: ['squat', 'jack'] }], __runtime: 'should be dropped'
+  };
+  const p = X.exportPayload(db, 9999);
+  console.log('[bk-export] keys =', Object.keys(p).sort().join(','));
+  if (p.app !== 'dongjing' || p.ver !== 1 || p.exportedAt !== 9999) { console.log('导出头部错'); process.exit(1); }
+  if ('__runtime' in p) { console.log('白名单外字段不应被导出'); process.exit(1); }
+  if (p.set.sfx !== true || p.set.voice !== false || p.set.weight !== 60) { console.log('set 默认补齐错', JSON.stringify(p.set)); process.exit(1); }
+  if (p.pro !== true || p.quota.used !== 3 || p.templates.length !== 1) process.exit(1);
+
+  /* sanitizeRecords：脏项丢弃、类型纠正 */
+  const dirtyRecs = [
+    { ts: 1, ex: 'squat', mode: 'reps', valid: 5 },                       // 合法
+    { ts: 'not-num', mode: 'reps', valid: 5 },                          // ts 非数 → 丢
+    { ts: 2, mode: 'fly', valid: 1 },                                     // mode 非法 → 丢
+    null, { }, 42,                                                        // 丢
+    { ts: 3, ex: 'game-collect', mode: 'game', valid: 21, game: 'collect' }  // 合法且带 game
+  ];
+  const clean = X.sanitizeRecords(dirtyRecs);
+  console.log('[bk-sanitize] 保留 =', clean.length, clean.map(r => r.ts));
+  if (clean.length !== 2 || clean[0].ts !== 1 || clean[1].game !== 'collect') { console.log('记录清洗错'); process.exit(1); }
+  if (typeof clean[0].score !== 'number' || clean[0].attempts !== 5) { console.log('缺省 attempts/score 纠正错'); process.exit(1); }
+
+  /* mergeRecords：同 ts+ex 去重，不翻倍 */
+  const merged = X.mergeRecords(
+    [{ ts: 1, ex: 'squat', mode: 'reps', valid: 5 }, { ts: 2, ex: 'jack', mode: 'reps', valid: 6 }],
+    [{ ts: 1, ex: 'squat', mode: 'reps', valid: 5 }, { ts: 3, ex: 'wave', mode: 'reps', valid: 7 }]);
+  console.log('[bk-merge] 合并后 =', merged.length, merged.map(r => r.ts).join(','));
+  if (merged.length !== 3 || merged.map(r => r.ts).join(',') !== '1,2,3') { console.log('合并去重错'); process.exit(1); }
+
+  /* parseImport：json 错 / 非动镜 / 形状不对 / 正常 */
+  if (X.parseImport('{bad json').ok || X.parseImport('{bad json').why !== 'json') { console.log('json 错分支'); process.exit(1); }
+  if (X.parseImport(JSON.stringify({ app: 'other', records: [] })).why !== 'app') { console.log('app 错分支'); process.exit(1); }
+  if (X.parseImport(JSON.stringify({ app: 'dongjing', records: 'nope' })).why !== 'shape') { console.log('shape 错分支'); process.exit(1); }
+  const round = X.parseImport(JSON.stringify(p));
+  console.log('[bk-roundtrip] ok =', round.ok, 'records =', round.payload.records.length, 'templates =', round.payload.templates.length);
+  if (!round.ok || round.payload.records.length !== 1 || round.payload.pro !== true) process.exit(1);
+
+  /* ts 必须保留完整精度（13 位毫秒时间戳 >2^31，|0 会截成负数，曾真实发生）*/
+  const bigTs = 1700000000123;
+  const tp = X.exportPayload({ records: [{ ts: bigTs, ex: 'squat', mode: 'reps', valid: 3 }] });
+  console.log('[bk-ts] 导出 ts =', tp.records[0].ts, '期望 =', bigTs);
+  if (tp.records[0].ts !== bigTs) { console.log('ts 被截断/溢出'); process.exit(1); }
+  const tp2 = X.parseImport(JSON.stringify(tp));
+  if (tp2.payload.records[0].ts !== bigTs) { console.log('round-trip 后 ts 变了'); process.exit(1); }
+
+  console.log('[bk] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

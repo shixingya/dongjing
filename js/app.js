@@ -1609,6 +1609,8 @@
     $('#btn-voice').textContent = DB.set.voice ? '🔊' : '🔇';
     $('#chk-sfx').checked = DB.set.sfx;
     $('#chk-mirror').checked = DB.set.mirror;
+    const bs = $('#bk-sum');
+    if (bs) bs.textContent = '本机现有 ' + DB.records.length + ' 条训练记录 · ' + (DB.posture ? DB.posture.length : 0) + ' 次体态评估 · ' + X.tplSafe(DB.templates).length + ' 门常用课';
   }
   function openPro(reason) {
     // 只说真的卡点：Pro 锁的是动作与次数；报表、体态评估、关卡都是全量免费，不能当成付费卖点
@@ -1634,6 +1636,41 @@
   bindSet('#chk-sfx', 'sfx');
   bindSet('#chk-mirror', 'mirror', v => { $('#cam').classList.toggle('no-mirror', !v); $('#pst-cam').classList.toggle('no-mirror', !v); });
   $('#btn-voice').onclick = () => { DB.set.voice = !DB.set.voice; save(); renderMe(); toast(DB.set.voice ? '语音纠错已开启' : '语音纠错已关闭'); };
+
+  /* ---------------- v2.0 数据备份：导出 / 导入 ----------------
+   * 无后端 = 清缓存就全丢且无法补救；把 localStorage 导成一份可存走/换机器的 JSON。
+   * 序列化与校验全在 DJX（exportPayload/parseImport/mergeRecords），这里只碰文件 IO。 */
+  function downloadJSON(filename, text) {
+    try {
+      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
+      return true;
+    } catch (e) { return false; }
+  }
+  $('#btn-export').onclick = () => {
+    const d = new Date(), pad = n => String(n).padStart(2, '0');
+    const fn = 'dongjing-backup-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '.json';
+    if (downloadJSON(fn, JSON.stringify(X.exportPayload(DB), null, 2))) toast('已导出 ' + DB.records.length + ' 条训练记录');
+    else toast('导出失败：浏览器不支持下载');
+  };
+  $('#inp-import').onchange = e => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      const input = e.target; input.value = '';              // 先清空，允许重复导入同一文件
+      const res = X.parseImport(String(rd.result || ''));
+      if (!res.ok) { toast(res.why === 'json' ? '文件不是有效的 JSON' : res.why === 'app' ? '这不是动镜导出的备份文件' : '备份文件结构不对'); return; }
+      const p = res.payload, merge = $('#chk-merge').checked;
+      DB.records = merge ? X.mergeRecords(DB.records, p.records) : p.records;
+      DB.posture = p.posture; DB.quota = p.quota; DB.set = p.set; DB.pro = p.pro; DB.templates = p.templates;
+      save(); renderMe(); renderHome();
+      toast('导入成功：' + DB.records.length + ' 条记录 · ' + DB.templates.length + ' 门课');
+    };
+    rd.onerror = () => { e.target.value = ''; toast('读取文件失败'); };
+    rd.readAsText(f);
+  };
 
   /* ---------------- 移动端可用性：环境预检 + 后台暂停 + 关页释放 ---------------- */
   function envCheck() {

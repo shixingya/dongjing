@@ -107,6 +107,8 @@
 
 - ✅ **v1.9 已交付（我的课程：把一套动作存成能反复开练的常用课）**：① `exercises.js` 新增纯逻辑段（`templateOf / tplAdd / tplRemove / tplSafe / tplEstimate / tplName`），把校验/去重/命名/时长估计全放在可单测的纯函数层，存储与渲染交给 `app.js`；② **两个入口复用现有数据流**：循环跟练打完的结果页（记住 `T.seq` 的选片）与一句话编排的方案旁各加一个“💾 存为常用课”，不新建训练入口，“▶ 开练”直接调已有 `startCircuit(ids)`；③ **去重与限长均为明确拒绝而非静默丢弃**：`tplAdd` 返回 `{ok,why}`（why=bad/dup/full），同组动作不论顺序都视为同一门课（用户很容易存出一堆微差别重复项），上限 12 门；④ **脏数据隔离**：`tplSafe` 只认结构合法项（id/name 为字符串、ids ≥2 且全为已知动作），把手改过或旧版本的 localStorage 脏项过滤在渲染之前，含 Pro 动作时未订阅点“开练”先弹升级说明，不会绕过权限直接开跑；⑤ **时长与课表共用 `exRoundSec` 口径**，不另起一套算法估出两个分钟数；卡片如实展示去重后的段数与预计时长（即“开练”真实得到的量）；⑥ 6 组单测覆盖 templateOf 去重/不足 2 项拒绝/HTML 字符过滤、tplAdd 四路分支、tplSafe 脏项过滤、tplEstimate 的 locked/seatedOnly/estMin；浏览器冒烟验证“编排→保存→查重→首页渲染→删除→刷新持久化”全链路 0 console error。
 
+- ✅ **v2.0 已交付（数据备份：把无后端的本地数据变成可存走/换机器的 JSON）**：① 纯逻辑落在 `exercises.js`（`exportPayload / parseImport / sanitizeRecords / mergeRecords`），序列化与校验都能离线单测；文件 IO（Blob 下载 / FileReader 读取）只在 `app.js`。② **外部文件一律不信任**：`exportPayload` 只导白名单字段（运行时临时态不入备份）、`sanitizeRecords` 逐条校类型（缺 ts/valid 或 mode 非法直接丢）、`parseImport` 先验 JSON 再验 `app==='dongjing'` 标记与 records 形状，返回 `{ok,why}`（why=json/app/shape）让 UI 说清拒绝原因。③ **两种导入语义**：默认整份覆盖；勾“仅并训练记录”走 `mergeRecords`，以 `ts+ex` 为键去重、按时间排序，重复导入同一份不会让记录翻倍。④ **修一个导出真实 bug**（浏览器冒烟拓到）：最初 `sanitizeRecords` 用 `ts|0` 把 13 位毫秒时间戳截成 32 位负数（1700000000000→-807049216），会连带弄坏连续打卡/周课表的“近 N 天”窗口；改 `Math.trunc` 保留完整精度，单测补了大 ts round-trip 断言防回归。（注：导出走浏览器下载、不上传任何服务器，与隐私承诺一致。）
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；

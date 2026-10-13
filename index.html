@@ -287,6 +287,16 @@
       <label class="row"><span>画面镜像</span><input type="checkbox" id="chk-mirror" checked></label>
     </div>
     <div class="card me-card">
+      <h4>数据备份</h4>
+      <p class="muted" id="bk-sum"></p>
+      <div class="bk-btns">
+        <button class="btn ghost" id="btn-export">导出备份 JSON</button>
+        <label class="btn ghost" id="lbl-import">导入备份文件<input type="file" id="inp-import" accept="application/json,.json" hidden></label>
+      </div>
+      <label class="switch-row"><input type="checkbox" id="chk-merge"><span>导入时仅合并训练记录（不勾选则整份覆盖当前数据）</span></label>
+      <p class="tiny muted">导出的是本浏览器里的训练记录 / 体态评估 / 我的课程 / 设置；换设备或清缓存前建议先导一份保存。导入会替换当前数据（合并模式只并训练记录，其余以文件为准）。</p>
+    </div>
+    <div class="card me-card">
       <h4>关于动镜</h4>
       <p class="muted">v1.0 · 纯网页 AI 体感私教。全部姿态推理在浏览器本地完成，不上传任何画面；训练记录仅存储在你的浏览器（localStorage）。</p>
       <p class="muted">仓库：github.com/shixingya/dongjing</p>

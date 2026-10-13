@@ -198,6 +198,9 @@ h3{font-size:18px}
 .plan-badge.free{border:1px solid var(--muted); color:var(--muted)}
 .plan-badge.pro{background:linear-gradient(135deg,#f5c451,#e79a2b); color:#291a02}
 .switch-row{display:flex; gap:8px; align-items:flex-start; margin-top:12px; font-size:12px; color:var(--muted); cursor:pointer}
+.bk-btns{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 4px}
+.bk-btns .btn{flex:1; min-width:130px; margin:0; text-align:center}
+#lbl-import input[type=file]{display:none}
 .row{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px dashed var(--line); font-size:13.5px; color:var(--muted)}
 .row input[type=number]{width:70px; background:var(--bg2); border:1px solid var(--line); color:var(--txt); border-radius:8px; padding:6px 8px}
 .row input[type=checkbox]{accent-color:var(--hl); width:18px; height:18px}

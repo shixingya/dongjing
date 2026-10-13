@@ -1060,10 +1060,67 @@
     };
   }
 
+  /* ================= 数据备份（导出 / 导入，v2.0）=================
+   * 本地无后端：用户清浏览器缓存 = 全部训练记录、体态评估、我的课程一起丢，而且没有任何
+   * 补救。这里提供可单测的纯序列化/校验函数，把 localStorage 变成一份能存走、能换机器的 JSON。
+   * 关键：外部文件一律不信任——先白名单取字段、逐条校类型，再把脏项丢弃。 */
+  const BACKUP_APP = 'dongjing';
+  const BACKUP_VER = 1;
+
+  /* 训练记录字段校验：缺关键字段或类型不对的直接丢，不把脏项灌回统计 */
+  function sanitizeRecords(list) {
+    const MODES = { reps: 1, time: 1, game: 1 };
+    return (Array.isArray(list) ? list : [])
+      .filter(r => r && typeof r === 'object' && Number.isFinite(r.ts) && Number.isFinite(r.valid) && MODES[r.mode])
+      .map(r => ({
+        ts: Math.trunc(r.ts), ex: String(r.ex || ''), name: String(r.name || ''), mode: r.mode,
+        target: r.target | 0, valid: r.valid | 0,
+        attempts: Number.isFinite(r.attempts) ? r.attempts | 0 : (r.valid | 0),
+        secs: r.secs | 0, cal: +((+r.cal || 0).toFixed(1)),
+        score: Math.max(0, Math.min(100, r.score | 0)),
+        issues: (r.issues && typeof r.issues === 'object') ? r.issues : {},
+        game: r.game ? String(r.game) : undefined
+      }));
+  }
+
+  /* 只导出白名单字段，避免把运行时临时态写进备份；set 补齐默认值防旧版本缺字段 */
+  function exportPayload(db, now) {
+    const d = db || {};
+    return {
+      app: BACKUP_APP, ver: BACKUP_VER, exportedAt: Number(now) || Date.now(),
+      records: sanitizeRecords(d.records),
+      posture: Array.isArray(d.posture) ? d.posture.slice(-120) : [],
+      quota: (d.quota && typeof d.quota === 'object')
+        ? { month: String(d.quota.month || ''), used: Math.max(0, d.quota.used | 0) }
+        : { month: '', used: 0 },
+      set: Object.assign({ voice: true, sfx: true, mirror: true, weight: 60, dailyGoal: 30 }, d.set || {}),
+      pro: !!d.pro,
+      templates: tplSafe(d.templates)
+    };
+  }
+
+  /* 合并去重：同一 ts+动作视为同一次（重复导入不会让记录翻倍），按时间升序 */
+  function mergeRecords(a, b) {
+    const map = {};
+    sanitizeRecords(a).concat(sanitizeRecords(b)).forEach(r => { map[r.ts + ':' + r.ex] = r; });
+    return Object.keys(map).map(k => map[k]).sort((x, y) => x.ts - y.ts);
+  }
+
+  /* 解析导入文本：JSON + 结构校验，返回 {ok, why, payload}。why: json/app/shape */
+  function parseImport(raw) {
+    let obj;
+    try { obj = (typeof raw === 'string') ? JSON.parse(raw) : raw; }
+    catch (e) { return { ok: false, why: 'json' }; }
+    if (!obj || typeof obj !== 'object' || obj.app !== BACKUP_APP) return { ok: false, why: 'app' };
+    if (!Array.isArray(obj.records)) return { ok: false, why: 'shape' };
+    return { ok: true, payload: exportPayload(obj) };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
+    BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,
