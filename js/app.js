@@ -1563,6 +1563,7 @@
     renderAchievements();
     renderDaypart();
     renderBests();
+    renderRhythm();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1670,6 +1671,24 @@
       '<span class="pb-best">' + fmtBest(e) + '</span></div>').join('');
     const sum = $('#pb-sum');
     if (sum) sum.textContent = '共 ' + pb.length + ' 个动作有成绩';
+  }
+
+  /* 星期训练节奏：weekdayRhythm 纯逻辑算七天节数/点数/均分与工作日周末拆分，这里只画横向条 */
+  function renderRhythm() {
+    const box = $('#wd-rows'); if (!box) return;
+    const wd = X.weekdayRhythm(DB.records);
+    if (!wd.total) { box.innerHTML = '<div class="empty-tip">还没有训练记录，练几天就能看出你星期几最勤</div>'; const s0 = $('#wd-sum'); if (s0) s0.textContent = ''; return; }
+    const max = Math.max(1, ...wd.days.map(d => d.sessions));
+    box.innerHTML = wd.days.map(d => {
+      const pctw = Math.round(d.sessions / max * 100);
+      const extra = d.sessions ? (d.points + ' 点' + (d.avgScore ? ' · 均分 ' + d.avgScore : '')) : '未训练';
+      return '<div class="wd-row' + (d.idx === wd.busiestIdx ? ' best' : '') + '" title="' + d.name + ' · ' + d.sessions + ' 节 · ' + extra + '">' +
+        '<span class="wd-name">' + d.name + '</span>' +
+        '<span class="wd-bar"><i style="width:' + pctw + '%"></i></span>' +
+        '<span class="wd-num">' + (d.sessions || '—') + '</span></div>';
+    }).join('');
+    const sum = $('#wd-sum');
+    if (sum) sum.textContent = '你最勤的是 ' + wd.busiestName + '（' + wd.busiestSessions + ' 节）· 周末占 ' + wd.weekendPct + '%';
   }
 
   /* ---------------- 我的 / Pro ---------------- */

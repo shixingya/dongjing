@@ -1321,12 +1321,43 @@
     }).sort((a, b) => b.sessions - a.sessions || b.points - a.points);
   }
 
+  /* ================= 每周星期训练节奏（v2.6）=================
+   * 与 v2.4 时段分布互补：那个看“一天里什么时候练”，这个看“一周里星期几练”。
+   * 把记录按星期（周一为一周起点）分桶统计节数/训练点/平均评分，找出最勤的一天，
+   * 并拆工作日 vs 周末占比。口径继续复用 recPoints。 */
+  const WEEKDAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+  function weekdayIndex(ts) { return (new Date(ts).getDay() + 6) % 7; }   // JS 0=周日 → 转成周一为 0
+  function weekdayRhythm(records) {
+    const rs = Array.isArray(records) ? records : [];
+    const acc = WEEKDAY_NAMES.map(() => ({ sessions: 0, points: 0, scoreSum: 0, scoreN: 0 }));
+    rs.forEach(r => {
+      if (!r || !Number.isFinite(r.ts)) return;
+      const a = acc[weekdayIndex(r.ts)];
+      a.sessions++; a.points += recPoints(r);
+      if (Number.isFinite(r.score)) { a.scoreSum += r.score; a.scoreN++; }
+    });
+    const days = acc.map((a, i) => ({
+      idx: i, name: WEEKDAY_NAMES[i], sessions: a.sessions, points: a.points,
+      avgScore: a.scoreN ? Math.round(a.scoreSum / a.scoreN) : 0
+    }));
+    const total = days.reduce((s, d) => s + d.sessions, 0);
+    let busiest = days[0];
+    days.forEach(d => { if (d.sessions > busiest.sessions || (d.sessions === busiest.sessions && d.points > busiest.points)) busiest = d; });
+    const weekend = days[5].sessions + days[6].sessions, weekday = total - weekend;
+    return {
+      days, total, busiestIdx: total ? busiest.idx : null, busiestName: total ? busiest.name : '',
+      busiestSessions: total ? busiest.sessions : 0,
+      weekdaySessions: weekday, weekendSessions: weekend,
+      weekendPct: total ? Math.round(weekend / total * 100) : 0
+    };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

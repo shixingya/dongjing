@@ -889,4 +889,49 @@ function mkHand(tipDist) {
   console.log('[pb] 全部断言通过');
 }
 
+/* ================= v2.6 每周星期训练节奏 weekdayRhythm ================= */
+{
+  const fail = m => { console.log('[wd] FAIL:', m); process.exit(1); };
+  if (X.WEEKDAY_NAMES.length !== 7) fail('星期名应为 7');
+  if (X.WEEKDAY_NAMES[0] !== '周一' || X.WEEKDAY_NAMES[6] !== '周日') fail('首应为周一、末应为周日');
+  const dayTs = i => new Date(2026, 9, 12 + i, 8, 0).getTime();   // 2026-10-12 = 周一
+
+  /* 空数据 */
+  const e = X.weekdayRhythm([]);
+  if (e.total !== 0 || e.busiestIdx !== null || e.weekendPct !== 0) fail('空数据 total/busiest/pct');
+  if (e.days.length !== 7 || e.days[0].name !== '周一') fail('days 应 7 项从周一起');
+
+  /* 分桶 + 工作日/周末拆分 */
+  const recs = [
+    { ts: dayTs(0), mode: 'reps', valid: 10, score: 90 },
+    { ts: dayTs(0), mode: 'reps', valid: 5, score: 70 },     // 周一 2 节
+    { ts: dayTs(2), mode: 'time', valid: 100, score: 80 },   // 周三 1 节
+    { ts: dayTs(5), mode: 'reps', valid: 8, score: 60 },     // 周六 1 节
+    { ts: dayTs(6), mode: 'reps', valid: 4 }                 // 周日 1 节（无 score）
+  ];
+  const r = X.weekdayRhythm(recs);
+  if (r.days[0].sessions !== 2) fail('周一应 2 节 实际 ' + r.days[0].sessions);
+  if (r.days[2].sessions !== 1) fail('周三应 1 节');
+  if (r.days[2].points !== 10) fail('周三 time 100s → points 10 实际 ' + r.days[2].points);
+  if (r.days[0].avgScore !== 80) fail('周一均分期望 80(90+70)/2 实际 ' + r.days[0].avgScore);
+  if (r.days[6].avgScore !== 0) fail('周日无 score 均分应 0');
+  if (r.busiestIdx !== 0 || r.busiestName !== '周一' || r.busiestSessions !== 2) fail('最勤应周一 2 节');
+  if (r.total !== 5) fail('total 应 5 实际 ' + r.total);
+  if (r.weekdaySessions !== 3 || r.weekendSessions !== 2) fail('工作日3/周末2 实际 ' + r.weekdaySessions + '/' + r.weekendSessions);
+  if (r.weekendPct !== 40) fail('周末占比期望 40 实际 ' + r.weekendPct);
+
+  /* 平手按点数决胜 */
+  const tie = X.weekdayRhythm([
+    { ts: dayTs(1), mode: 'reps', valid: 5 },    // 周二 1 节 points 5
+    { ts: dayTs(3), mode: 'reps', valid: 50 }    // 周四 1 节 points 50
+  ]);
+  if (tie.busiestIdx !== 3) fail('平手应选点数多的周四, 实际 ' + tie.busiestIdx);
+
+  /* 非法记录丢弃 */
+  const bad = X.weekdayRhythm([null, { ts: NaN }, { ts: dayTs(4), mode: 'reps', valid: 3 }]);
+  if (bad.total !== 1) fail('非法记录应丢弃, 实际 total=' + bad.total);
+
+  console.log('[wd] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

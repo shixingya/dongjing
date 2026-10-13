@@ -119,6 +119,8 @@
 
 - ✅ **v2.5 已交付（动作个人最佳榜：每个动作你到底练到了什么程度）**：① `personalBests(records)` 纯函数—按动作 id 聚合，逐条累加 `{sessions,best,bestScore,total,points,avgScore,last}`，只认 EXERCISES 真 id（关卡 game- / 循环 circuit 哨兵值不入榜）、非法记录丢弃不崩，返回按节数降序、平手按训练点决胜的榜单；② **口径不另起炉灶**：points 继续走 `recPoints`（与目标环/热力图/成就/环比/时段一套）；③ **best 按动作 mode 分支解读**：计次类显“单次最多 N 次”、计时类显“单次最久 N 秒”，主行带“练过 N 次 · 均分 X”，hover 补“累计总量 · 最近日期”；④ 渲染只画 `#pb-list` 行列表（图标+名称+主行+右侧高亮最佳值）、副标题“共 N 个动作有成绩”；⑤ 单测覆盖 squat（best20/total35/avg80/排序首位）、plank（计时 best60/points6）、lunge（无 ts→sessions1/last0）、game 不入榜、排序断言；浏览器冒烟注入 squat/plank/jack 三类真动作 + game-collect，DOM 3 行与 `DJX.personalBests` 一致、深蹲首位“最多 20 次”、平板“最久 60 秒”、单位切换正确、game 不入榜、0 console error。
 
+- ✅ **v2.6 已交付（星期训练节奏：发现“你一周里星期几最勤快”）**：① `weekdayRhythm(records)` 纯函数—把记录按星期分桶（周一为一周起点，`weekdayIndex = (getDay()+6)%7` 把 JS 周日=0 转过来），逐日统计 sessions / points（复用 `recPoints`）/ avgScore，返回 `{days(7),total,busiestIdx,busiestName,busiestSessions,weekdaySessions,weekendSessions,weekendPct}`；② **与 v2.4 时段分布互补**（一个看日内“什么时候练”、一个看周内“星期几练”），同样按节数优先、平手按点数决胜；空数据/非法记录（null / NaN ts）丢弃不崩；③ **额外拆工作日 vs 周末**：周六/周日归周末，weekendPct 让“只周末突击型” vs “工作日打卡型”一眼可辨；④ 渲染只画七行横向迷你条（宽=sessions/max）、最勤一行加 best 高亮，副标题“你最勤的是 X（N 节）· 周末占 X%”；⑤ 单测覆盖空数据、七天分桶与均分/points、工作日3/周末2 拆分与 weekendPct、平手按点数决胜、非法记录丢弃；浏览器冒烟注入“周一 3 节 + 周三 1 + 周六 2”跨星期记录，DOM 7 行与 `DJX.weekdayRhythm` 逐行一致、best 行=周一、total 6、周末占 33%、0 console error。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；
