@@ -1361,4 +1361,52 @@ function mkHand(tipDist) {
   console.log('[wr] 全部断言通过');
 }
 
+/* ================= v3.11 月度趋势 monthlyTrend ================= */
+{
+  const fail = m => { console.log('[mt] FAIL:', m); process.exit(1); };
+  if (typeof X.monthlyTrend !== 'function') fail('monthlyTrend 未导出');
+  const T = (y, m, d, n, cal) => ({ ts: new Date(y, m, d, 12).getTime(), ex: 'squat', mode: 'reps', valid: n, attempts: n, cal: cal || 0 });
+  const today = new Date(2026, 5, 15).getTime();   // 2026年6月为当月
+
+  /* span 限幅 */
+  if (X.monthlyTrend([], { today, months: 70 }).span !== 12) fail('months 70 应限幅 12');
+  if (X.monthlyTrend([], { today, months: 1 }).span !== 3) fail('months 1 应限幅 3');
+  if (X.monthlyTrend([], { today }).span !== 6) fail('默认 span 6');
+
+  /* 空 / null 不崩 */
+  const e = X.monthlyTrend([], { today });
+  if (e.count !== 0 || e.cur !== null || e.best !== null || e.trend !== 'none') fail('空数据 count0/cur null/best null/none');
+  if (X.monthlyTrend(null, { today }).count !== 0) fail('null 应不崩');
+
+  /* 主用例：Jan–May 完整月 10/20/30/40/50 + 六月 25（两天） */
+  const r = X.monthlyTrend([
+    T(2026, 0, 10, 10, 100), T(2026, 1, 10, 20), T(2026, 2, 10, 30), T(2026, 3, 10, 40), T(2026, 4, 10, 50),
+    T(2026, 5, 5, 15, 200), T(2026, 5, 9, 10),
+    { ts: NaN, ex: 'squat', valid: 99 }, null], { today });
+  if (r.count !== 6) fail('应 6 个月（非法 ts/null 排除）实际 ' + r.count);
+  if (!r.cur || r.cur.points !== 25 || r.cur.days !== 2 || r.cur.calories !== 200) fail('当月 25 点/2 活跃天/200 千卡 实际 ' + JSON.stringify(r.cur));
+  if (!r.best || r.best.points !== 50 || r.best.label !== '5月') fail('最佳月=5月 50');
+  if (r.best.cur) fail('最佳月不能是进行中的当月');
+  if (!r.prev || r.prev.points !== 50) fail('上一个完整月=5月');
+  if (r.mom !== 50) fail('当月/上月 25/50 应 50% 实际 ' + r.mom);
+  if (r.trend !== 'up' || r.firstAvg !== 15 || r.lastAvg !== 40) fail('前半15/后半40 → up 实际 ' + r.trend + '/' + r.firstAvg + '/' + r.lastAvg);
+
+  /* 下降趋势：完整月 [50,40,30] */
+  const d = X.monthlyTrend([T(2026, 0, 5, 50), T(2026, 1, 5, 40), T(2026, 2, 5, 30)], { today: new Date(2026, 5, 1).getTime() });
+  if (d.trend !== 'down' || d.cur !== null) fail('50→35 应 down、无当月记录 cur null 实际 ' + d.trend + '/' + d.cur);
+
+  /* 持平 + 最佳平手取更近一月：[50(Jan),50(Feb)] */
+  const fl = X.monthlyTrend([T(2026, 0, 5, 50), T(2026, 1, 5, 50)], { today });
+  if (fl.trend !== 'flat') fail('50/50 应 flat 实际 ' + fl.trend);
+  if (!fl.best || fl.best.label !== '2月') fail('平手最佳取更近的 2月 实际 ' + (fl.best && fl.best.label));
+
+  /* recent 截尾：14 个月只留最后 span(6) 个 */
+  const many = [];
+  for (let k = 0; k < 14; k++) { const y = 2024 + Math.floor((k + 6) / 12); const m = (k + 6) % 12; many.push(T(y, m, 5, 1)); }
+  const mg = X.monthlyTrend(many, { today, months: 6 });
+  if (mg.recent.length !== 6) fail('recent 应只留 6 个月 实际 ' + mg.recent.length);
+
+  console.log('[mt] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

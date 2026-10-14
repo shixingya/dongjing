@@ -1703,12 +1703,54 @@
     return { weeks, recent, count: weeks.length, cur, record: rec, ratio, status };
   }
 
+  /* ================= 月度趋势（v3.11）=================
+   * 按自然月分桶用 recPoints 算每月训练点/节数/活跃天/千卡，给出最近几个月的宏观弧线：
+   * 当月是进行中（partial，不进最佳月）；趋势拿历史完整月的前半 vs 后半均值比较。
+   * 与周纪录（v3.10）互补：那个看单周短周期脉冲、这个看跨月长期趋势。纯逻辑，可离线单测。 */
+  function monthlyTrend(records, opts) {
+    const o = opts || {};
+    const ds = t => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); };
+    const now = Number(o.today) || Date.now();
+    const span = Math.max(3, Math.min(12, (o.months || 6) | 0));
+    const rs = (Array.isArray(records) ? records : []).filter(r => r && Number.isFinite(r.ts));
+    const map = {};
+    rs.forEach(r => {
+      const d = new Date(r.ts); const key = d.getFullYear() * 12 + d.getMonth();
+      let b = map[key];
+      if (!b) b = map[key] = { y: d.getFullYear(), m: d.getMonth(), points: 0, sessions: 0, calories: 0, days: {} };
+      const p = recPoints(r); b.points += p; b.sessions++;
+      if (p > 0) b.days[ds(r.ts)] = 1;
+      if (Number.isFinite(r.cal) && r.cal > 0) b.calories += r.cal;
+    });
+    const curKey = new Date(now).getFullYear() * 12 + new Date(now).getMonth();
+    const keys = Object.keys(map).map(Number).sort((a, b) => a - b);
+    const months = keys.map(k => { const b = map[k];
+      return { key: k, label: (b.m + 1) + '月', y: b.y, m: b.m, points: Math.round(b.points), sessions: b.sessions, days: Object.keys(b.days).length, calories: Math.round(b.calories), cur: k === curKey }; });
+    const cur = months.find(mm => mm.cur) || null;
+    const full = months.filter(mm => !mm.cur);
+    let best = null; full.forEach(mm => { if (!best || mm.points >= best.points) best = mm; });   // 平手取更近一月
+    const prev = full.length ? full[full.length - 1] : null;   // 上一个完整月（当月之前最近一个）
+    const mom = (cur && prev && prev.points > 0) ? Math.round(cur.points / prev.points * 100) : 0;
+    // 宏观趋势：完整月按索引分前半/后半，比均训练点
+    let trend = 'none', firstAvg = 0, lastAvg = 0;
+    if (full.length >= 2) {
+      const half = Math.floor(full.length / 2);
+      const avg = a => a.length ? Math.round(a.reduce((s, mm) => s + mm.points, 0) / a.length) : 0;
+      firstAvg = avg(full.slice(0, half)); lastAvg = avg(full.slice(half));
+      if (firstAvg <= 0) trend = lastAvg > 0 ? 'up' : 'flat';
+      else if (lastAvg >= firstAvg * 1.15) trend = 'up';
+      else if (lastAvg <= firstAvg * 0.85) trend = 'down';
+      else trend = 'flat';
+    }
+    return { months, recent: months.slice(-span), count: months.length, cur, best, prev, mom, trend, firstAvg, lastAvg, span };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

@@ -1566,7 +1566,7 @@
     { t: '成就', s: '.ach-card' }, { t: '时段', s: '.dp-card' }, { t: '最佳', s: '.pb-card' },
     { t: '星期', s: '.wd-card' }, { t: '部位', s: '.bc-card' }, { t: '纠错', s: '.it-card' },
     { t: '构成', s: '.ms-card' }, { t: '走势', s: '.st-card' }, { t: '节奏', s: '.tc-card' },
-    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
+    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '月度', s: '.mt-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
   ];
   function renderRepNav() {
     const nav = $('#rep-nav'); if (!nav) return;
@@ -1607,6 +1607,7 @@
     renderGoal();
     renderScoreDist();
     renderWeekRec();
+    renderMonthly();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1934,6 +1935,25 @@
     if (sum) sum.textContent = wr.record ? ('历史最佳 ' + wr.record.points + ' 点（' + wr.record.label + '）') : ('共 ' + wr.count + ' 个训练周');
     const NOTE = { record: '本周已打破（或追平）个人单周纪录 🎉', close: '本周已达历史最佳的 ' + wr.ratio + '%，再加把劲', climb: '本周到历史最佳的 ' + wr.ratio + '%，稳步往上爬', start: '本周才到历史最佳的 ' + wr.ratio + '%，先积起来再说', none: '本周还没开练，纪录等你刷新' };
     if (note) note.innerHTML = '<span class="wr-tag ' + wr.status + '">' + (NOTE[wr.status] || NOTE.none) + '</span>';
+  }
+
+  /* 月度趋势：monthlyTrend 纯逻辑按月分桶，这里画最近几个月的横向行条 + 宏观走势文案 */
+  function renderMonthly() {
+    const box = $('#mt-rows'); if (!box) return;
+    const sum = $('#mt-sum');
+    const mt = X.monthlyTrend(DB.records, { today: Date.now(), months: 6 });
+    if (!mt.count) { box.innerHTML = '<div class="empty-tip">还没有训练记录，练起来这里会拉开你的跨月弧线</div>'; if (sum) sum.textContent = ''; return; }
+    const max = Math.max(1, ...mt.recent.map(m => m.points));
+    box.innerHTML = mt.recent.map(m => {
+      const cls = (m.cur ? ' cur' : '') + (mt.best && m.key === mt.best.key && !m.cur ? ' best' : '');
+      return '<div class="mt-row' + cls + '" title="' + m.y + '年' + m.label + ' · ' + m.points + ' 训练点 · ' + m.sessions + ' 节 · 活跃 ' + m.days + ' 天 · 约 ' + m.calories + ' 千卡' + (m.cur ? '（本月进行中）' : (mt.best && m.key === mt.best.key ? '（最佳月）' : '')) + '">' +
+        '<span class="mt-name">' + m.label + (m.cur ? '・本月' : '') + '</span>' +
+        '<span class="mt-track"><i style="width:' + Math.round(m.points / max * 100) + '%"></i></span>' +
+        '<b class="mt-num">' + m.points + '</b></div>';
+    }).join('');
+    const TR = { up: { t: '跨月看训练量在往上走 ↑', c: 'up' }, down: { t: '最近几个月不如之前 ↓', c: 'down' }, flat: { t: '训练量保持平稳・', c: '' }, none: { t: '再多练几个月就能看出长期趋势', c: '' } };
+    const tr = TR[mt.trend] || TR.none;
+    if (sum) sum.innerHTML = (mt.best ? ('最佳月 ' + mt.best.label + ' ' + mt.best.points + ' 点 · ') : '') + '<span class="mt-verdict ' + tr.c + '">' + tr.t + '</span>';
   }
 
   /* ---------------- 我的 / Pro ---------------- */

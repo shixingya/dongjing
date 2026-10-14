@@ -522,6 +522,20 @@ h3{font-size:18px}
 .wr-tag.record{background:rgba(79,195,138,.16); color:var(--hl); font-weight:700}
 .wr-tag.close,.wr-tag.climb{color:var(--hl2)}
 
+.mt-rows{display:flex; flex-direction:column; gap:9px; margin-top:12px}
+.mt-row{display:grid; grid-template-columns:56px 1fr 34px; align-items:center; gap:9px}
+.mt-name{font-size:12.5px; color:var(--muted); white-space:nowrap}
+.mt-track{height:11px; border-radius:6px; background:#1a2434; overflow:hidden}
+.mt-track i{display:block; height:100%; background:var(--hl2); border-radius:6px; min-width:2px}
+.mt-num{font-size:12px; color:var(--txt); text-align:right}
+.mt-row.best .mt-name,.mt-row.best .mt-num{color:var(--hl); font-weight:700}
+.mt-row.best .mt-track i{background:var(--hl)}
+.mt-row.cur .mt-name{color:var(--hl2); font-weight:600}
+.mt-row.cur .mt-track i{background:var(--hl2); opacity:.72}
+.mt-verdict{font-weight:700}
+.mt-verdict.up{color:var(--hl)}
+.mt-verdict.down{color:var(--warn)}
+
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}
   .modal-box canvas{max-height:38vh}
