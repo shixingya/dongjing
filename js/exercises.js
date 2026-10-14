@@ -1905,12 +1905,40 @@
       best: items[0] || null, worst: items.length ? items[items.length - 1] : null };
   }
 
+  /* ================= 热量消耗画像（v3.21）=================
+   * 专看燃脂：把有有限 cal>0 的记录汇总，算总消耗 / 单节均值 / 最大单节，并按训练
+   * 模式（按次/计时/关卡）拆热量。与 v3.12 burner 徽章（只看总千卡）互补：这里给分布画像；
+   * 与 v3.0 modeSplit（按节数/点数分模式）正交：那个看练什么类型多、这个看哪类烧得多。
+   * cal 对所有记录都真实计（game/circuit 也烧卡），故不按真动作库过滤；非有限 cal/cal<=0 丢弃。 */
+  function calorieProfile(records) {
+    const meta = {};
+    EXERCISES.forEach(e => { meta[e.id] = e; });
+    const rs = (Array.isArray(records) ? records : []).filter(r => r && Number.isFinite(r.cal) && r.cal > 0);
+    const MODE_NAME = { reps: '按次', time: '计时', game: '关卡', other: '其他' };
+    const byMode = { reps: { cal: 0, n: 0 }, time: { cal: 0, n: 0 }, game: { cal: 0, n: 0 }, other: { cal: 0, n: 0 } };
+    let total = 0, best = null;
+    const label = t => { const x = new Date(t); return (x.getMonth() + 1) + '/' + x.getDate(); };
+    rs.forEach(r => {
+      const c = r.cal; total += c;
+      const k = (r.mode === 'time' || r.mode === 'game') ? r.mode : (r.mode === 'reps' ? 'reps' : 'other');
+      byMode[k].cal += c; byMode[k].n++;
+      if (!best || c > best.cal) best = { cal: c, name: meta[r.ex] ? meta[r.ex].name : (r.name || '—'), ts: r.ts };
+    });
+    const sessions = rs.length;
+    const modes = ['reps', 'time', 'game', 'other'].filter(k => byMode[k].n > 0).map(k => ({
+      key: k, name: MODE_NAME[k], cal: Math.round(byMode[k].cal), sessions: byMode[k].n,
+      avg: Math.round(byMode[k].cal / byMode[k].n)
+    })).sort((a, b) => b.cal - a.cal);
+    return { total: Math.round(total), sessions, avg: sessions ? Math.round(total / sessions) : 0,
+      best: best ? { cal: Math.round(best.cal), name: best.name, date: label(best.ts) } : null, modes };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend, topSessions, trainingBalance, weekStability, efficiencyStats,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend, topSessions, trainingBalance, weekStability, efficiencyStats, calorieProfile,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

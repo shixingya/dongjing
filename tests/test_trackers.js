@@ -1752,4 +1752,47 @@ function mkHand(tipDist) {
   console.log('[ef] 全部断言通过');
 }
 
+/* ================= v3.21 热量消耗画像 calorieProfile ================= */
+{
+  const D = 864e5;
+  const fail = m => { console.log('[cp] FAIL:', m); process.exit(1); };
+  if (typeof X.calorieProfile !== 'function') fail('calorieProfile 未导出');
+  const t0 = new Date(2026, 9, 15, 12).getTime();
+
+  /* 空 / null 不崩 */
+  const e = X.calorieProfile([]);
+  if (e.total !== 0 || e.sessions !== 0 || e.avg !== 0 || e.best !== null || e.modes.length !== 0) fail('空数据应 total0/sessions0/avg0/best null/modes []');
+  if (X.calorieProfile(null).total !== 0) fail('null 应不崩');
+
+  /* 主用例：squat50(reps)+plank30(time)+jack70(reps)+game40(game)+circuit60(reps) → NaN/0/null 排除 */
+  const r = X.calorieProfile([
+    { ts: t0, ex: 'squat', mode: 'reps', cal: 50 },
+    { ts: t0 - D, ex: 'plank', mode: 'time', cal: 30 },
+    { ts: t0 - 2 * D, ex: 'jack', mode: 'reps', cal: 70 },
+    { ts: t0 - 3 * D, ex: 'game-collect', mode: 'game', cal: 40 },
+    { ts: t0 - 4 * D, ex: 'circuit', mode: 'reps', cal: 60, name: '循环训练' },
+    { ts: t0, ex: 'squat', mode: 'reps', cal: NaN },
+    { ts: t0, ex: 'squat', mode: 'reps', cal: 0 },
+    { ts: t0, ex: 'squat', mode: 'reps', cal: -9 },
+    null
+  ]);
+  if (r.total !== 250 || r.sessions !== 5 || r.avg !== 50) fail('期望 total250/sessions5/avg50 实际 ' + r.total + '/' + r.sessions + '/' + r.avg);
+  if (!r.best || r.best.cal !== 70) fail('best 应 70 实际 ' + (r.best && r.best.cal));
+  if (r.best.name !== X.EXERCISES.find(x => x.id === 'jack').name) fail('best.name 应取动作库 jack 名 实际 ' + r.best.name);
+  if (r.modes.length !== 3) fail('应 3 类模式（reps/time/game，other 空）实际 ' + r.modes.length);
+  if (r.modes[0].key !== 'reps' || r.modes[0].cal !== 180 || r.modes[0].sessions !== 3 || r.modes[0].avg !== 60) fail('首位应 reps 180/3节/均60 实际 ' + JSON.stringify(r.modes[0]));
+  if (r.modes[1].key !== 'game' || r.modes[1].cal !== 40) fail('次位应 game 40 实际 ' + JSON.stringify(r.modes[1]));
+  if (r.modes[2].key !== 'time' || r.modes[2].cal !== 30) fail('末位应 time 30 实际 ' + JSON.stringify(r.modes[2]));
+
+  /* 非 reps/time/game 模式归 other；未知 ex 且无 r.name → name '—' */
+  const o = X.calorieProfile([{ ts: t0, ex: 'mystery', cal: 25 }]);
+  if (o.modes.length !== 1 || o.modes[0].key !== 'other' || o.modes[0].cal !== 25) fail('未知 mode 应归 other 实际 ' + JSON.stringify(o.modes));
+  if (o.best.name !== '—') fail('未知 ex 无 name 应 — 实际 ' + o.best.name);
+  /* circuit 走 r.name 分支 */
+  const c = X.calorieProfile([{ ts: t0, ex: 'circuit', mode: 'reps', cal: 10, name: '循环训练' }]);
+  if (c.best.name !== '循环训练') fail('circuit 应取 r.name 实际 ' + c.best.name);
+
+  console.log('[cp] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

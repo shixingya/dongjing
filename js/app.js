@@ -1566,7 +1566,7 @@
     { t: '成就', s: '.ach-card' }, { t: '时段', s: '.dp-card' }, { t: '最佳', s: '.pb-card' },
     { t: '星期', s: '.wd-card' }, { t: '部位', s: '.bc-card' }, { t: '纠错', s: '.it-card' },
     { t: '构成', s: '.ms-card' }, { t: '走势', s: '.st-card' }, { t: '节奏', s: '.tc-card' },
-    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '月度', s: '.mt-card' }, { t: '高光', s: '.ts-card' }, { t: '均衡', s: '.tb-card' }, { t: '稳定', s: '.ws-card' }, { t: '效率', s: '.ef-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
+    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '月度', s: '.mt-card' }, { t: '高光', s: '.ts-card' }, { t: '均衡', s: '.tb-card' }, { t: '稳定', s: '.ws-card' }, { t: '效率', s: '.ef-card' }, { t: '热量', s: '.cp-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
   ];
   function renderRepNav() {
     const nav = $('#rep-nav'); if (!nav) return;
@@ -1612,6 +1612,7 @@
     renderBalance();
     renderStability();
     renderEfficiency();
+    renderCalorie();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -2024,6 +2025,21 @@
     const VD = { great: '动作很标准·保持住', good: '大部分都做到标准了', fair: '标准率一般·慢一点做扎实', low: '先把动作做标准·宁少勿滥', none: '' };
     const CLS = { great: 'good', good: 'good', fair: 'warn', low: 'warn', none: '' };
     if (sum) sum.innerHTML = '总标准率 <span class="ef-verdict ' + (CLS[ef.verdict] || '') + '">' + ef.overallRate + '%</span>' + (ef.total > 1 && ef.worst ? ' · 待加强「' + ef.worst.name + '」' : '');
+  }
+
+  /* v3.21 热量消耗画像：calorieProfile 纯逻辑算千卡分布，这里画模式行条 + 单节最高 */
+  function renderCalorie() {
+    const box = $('#cp-rows'); if (!box) return;
+    const sum = $('#cp-sum');
+    const cp = X.calorieProfile(DB.records);
+    if (!cp.sessions) { box.innerHTML = '<div class="empty-tip">还没有带热量估算的记录，训练时设好体重就会自动算千卡</div>'; if (sum) sum.textContent = ''; return; }
+    const max = Math.max(1, ...cp.modes.map(m => m.cal));
+    box.innerHTML = cp.modes.map(m =>
+      '<div class="cp-row" title="' + m.name + ' · ' + m.cal + ' 千卡（' + m.sessions + ' 节，均 ' + m.avg + '）">' +
+      '<span class="cp-name">' + m.name + '</span>' +
+      '<span class="cp-track"><i style="width:' + Math.round(m.cal / max * 100) + '%"></i></span>' +
+      '<b class="cp-num">' + m.cal + '</b></div>').join('');
+    if (sum) sum.innerHTML = '累计 <b>' + cp.total + '</b> 千卡 · 均 ' + cp.avg + '/节' + (cp.best ? ' · 最高单节「' + cp.best.name + '」' + cp.best.cal + ' 千卡' : '');
   }
 
   /* ---------------- 我的 / Pro ---------------- */
