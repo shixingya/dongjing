@@ -1663,12 +1663,52 @@
     return { n, avg: n ? Math.round(sum / n) : 0, buckets, dominantKey: domKey, dominantName: domName };
   }
 
+  /* ================= 单周个人纪录（v3.10）=================
+   * 把记录按自然周（周一起，与 weekCompare 同基准）分桶，用 recPoints 口径算每周训练点；
+   * 历史最佳只算完整周（进行中的本周不算纪录，免得周初永远“差一点”），
+   * 再拿本周与最佳周比进度。纯逻辑，可离线单测。 */
+  function weekRecords(records, opts) {
+    const o = opts || {};
+    const D = 864e5;
+    const ds = t => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); };
+    const mondayStart = t => { const s = ds(t); const wd = (new Date(s).getDay() + 6) % 7; return s - wd * D; };
+    const now = Number(o.today) || Date.now();
+    const rs = (Array.isArray(records) ? records : []).filter(r => r && Number.isFinite(r.ts));
+    const map = {};
+    rs.forEach(r => {
+      const ws = mondayStart(r.ts);
+      let b = map[ws];
+      if (!b) b = map[ws] = { start: ws, points: 0, sessions: 0, days: new Set() };
+      b.points += recPoints(r); b.sessions++;
+      if (recPoints(r) > 0) b.days.add(ds(r.ts));
+    });
+    const wlabel = t => { const a = new Date(t), b = new Date(t + 6 * D);
+      return (a.getMonth() + 1) + '/' + a.getDate() + '–' + (b.getMonth() + 1) + '/' + b.getDate(); };
+    const curStart = mondayStart(now);
+    const weeks = Object.keys(map).map(Number).sort((a, b) => a - b).map(k => {
+      const b = map[k];
+      return { start: k, label: wlabel(k), points: Math.round(b.points), sessions: b.sessions, days: b.days.size, partial: k === curStart };
+    });
+    const cur = weeks.find(w => w.partial) || null;
+    const full = weeks.filter(w => !w.partial);
+    let rec = null;
+    full.forEach(w => { if (!rec || w.points > rec.points || (w.points === rec.points && w.start > rec.start)) rec = w; });   // 平手取更近的一周
+    let ratio = 0, status = 'none';
+    if (cur && cur.points > 0) {
+      if (!rec || cur.points >= rec.points) { ratio = 100; status = 'record'; }   // 无完整周参照时直接算破纪录
+      else { ratio = Math.round(cur.points / rec.points * 100); status = ratio >= 70 ? 'close' : ratio >= 30 ? 'climb' : 'start'; }
+    }
+    // 最近 8 周（升序取尾，供 UI 画柱）；首位是本周，partial 标记给 UI 区分
+    const recent = weeks.slice(-8);
+    return { weeks, recent, count: weeks.length, cur, record: rec, ratio, status };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

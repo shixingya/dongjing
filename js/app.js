@@ -1566,7 +1566,7 @@
     { t: '成就', s: '.ach-card' }, { t: '时段', s: '.dp-card' }, { t: '最佳', s: '.pb-card' },
     { t: '星期', s: '.wd-card' }, { t: '部位', s: '.bc-card' }, { t: '纠错', s: '.it-card' },
     { t: '构成', s: '.ms-card' }, { t: '走势', s: '.st-card' }, { t: '节奏', s: '.tc-card' },
-    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
+    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
   ];
   function renderRepNav() {
     const nav = $('#rep-nav'); if (!nav) return;
@@ -1606,6 +1606,7 @@
     renderImprovement();
     renderGoal();
     renderScoreDist();
+    renderWeekRec();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1913,6 +1914,26 @@
     if (leg) leg.innerHTML = sc.buckets.map(b =>
       '<span class="sc-item' + (b.key === sc.dominantKey ? ' dom' : '') + '"><i style="background:' + b.c + '"></i>' + b.name + ' <b>' + b.count + '</b></span>').join('');
     if (sum) sum.textContent = '共 ' + sc.n + ' 节有评分 · 均分 ' + sc.avg + ' · 多在「' + sc.dominantName + '」';
+  }
+
+  /* 单周个人纪录：weekRecords 纯逻辑按自然周分桶算训练点，这里画最近 8 周竖向柱 + 破纪录文案 */
+  function renderWeekRec() {
+    const box = $('#wr-chart'); if (!box) return;
+    const sum = $('#wr-sum'), note = $('#wr-note');
+    const wr = X.weekRecords(DB.records, { today: Date.now() });
+    if (!wr.count) { box.innerHTML = '<div class="empty-tip">还没有训练记录，练满一周这里会记下你的单周最强表现</div>'; if (sum) sum.textContent = ''; if (note) note.innerHTML = ''; return; }
+    const max = Math.max(1, ...wr.recent.map(w => w.points));
+    box.innerHTML = wr.recent.map(w => {
+      const h = Math.round(w.points / max * 100);
+      const cls = (w.partial ? ' cur' : '') + (wr.record && w.start === wr.record.start && !w.partial ? ' best' : '');
+      return '<div class="wr-col' + cls + '" title="' + w.label + ' · ' + w.points + ' 训练点 · ' + w.sessions + ' 节 · 活跃 ' + w.days + ' 天' + (w.partial ? '（本周进行中）' : (wr.record && w.start === wr.record.start ? '（历史最佳）' : '')) + '">' +
+        '<span class="wr-val">' + (w.points || '') + '</span>' +
+        '<span class="wr-bar"><i style="height:' + h + '%"></i></span>' +
+        '<span class="wr-lab">' + (w.partial ? '本周' : w.label.split('–')[0]) + '</span></div>';
+    }).join('');
+    if (sum) sum.textContent = wr.record ? ('历史最佳 ' + wr.record.points + ' 点（' + wr.record.label + '）') : ('共 ' + wr.count + ' 个训练周');
+    const NOTE = { record: '本周已打破（或追平）个人单周纪录 🎉', close: '本周已达历史最佳的 ' + wr.ratio + '%，再加把劲', climb: '本周到历史最佳的 ' + wr.ratio + '%，稳步往上爬', start: '本周才到历史最佳的 ' + wr.ratio + '%，先积起来再说', none: '本周还没开练，纪录等你刷新' };
+    if (note) note.innerHTML = '<span class="wr-tag ' + wr.status + '">' + (NOTE[wr.status] || NOTE.none) + '</span>';
   }
 
   /* ---------------- 我的 / Pro ---------------- */

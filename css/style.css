@@ -507,6 +507,21 @@ h3{font-size:18px}
 .sc-item.dom{color:var(--txt); font-weight:600}
 .sc-item.dom b{color:var(--hl)}
 
+.wr-chart{display:flex; align-items:flex-end; gap:7px; height:96px; margin-top:12px}
+.wr-col{flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; height:100%}
+.wr-val{font-size:11px; color:var(--muted); line-height:1; min-height:11px}
+.wr-bar{position:relative; flex:1; width:62%; max-width:40px; background:#1a2434; border-radius:7px; overflow:hidden}
+.wr-bar i{position:absolute; bottom:0; left:0; right:0; background:var(--hl2); border-radius:7px; min-height:3px}
+.wr-lab{font-size:10.5px; color:var(--muted); white-space:nowrap}
+.wr-col.best .wr-bar i{background:var(--hl)}
+.wr-col.best .wr-val{color:var(--hl); font-weight:700}
+.wr-col.cur .wr-bar i{background:var(--hl); opacity:.72}
+.wr-col.cur .wr-lab{color:var(--hl); font-weight:700}
+.wr-note{margin-top:11px}
+.wr-tag{display:inline-block; font-size:12.5px; padding:3px 10px; border-radius:20px; background:#1a2434; color:var(--muted)}
+.wr-tag.record{background:rgba(79,195,138,.16); color:var(--hl); font-weight:700}
+.wr-tag.close,.wr-tag.climb{color:var(--hl2)}
+
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}
   .modal-box canvas{max-height:38vh}

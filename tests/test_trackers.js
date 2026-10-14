@@ -1316,4 +1316,49 @@ function mkHand(tipDist) {
   console.log('[sc] 全部断言通过');
 }
 
+/* ================= v3.10 单周个人纪录 weekRecords ================= */
+{
+  const fail = m => { console.log('[wr] FAIL:', m); process.exit(1); };
+  if (typeof X.weekRecords !== 'function') fail('weekRecords 未导出');
+  const MON = new Date(2025, 11, 29, 12).getTime();      // 2025-12-29 是周一
+  const mk = (start, n) => ({ ts: start + 864e5, ex: 'squat', mode: 'reps', valid: n, attempts: n });
+
+  /* 空 / null / 非法入参不崩 */
+  const e = X.weekRecords([], { today: MON });
+  if (e.count !== 0 || e.cur !== null || e.record !== null || e.status !== 'none') fail('空数据 count0/cur null/record null/none');
+  if (X.weekRecords(null, { today: MON }).count !== 0) fail('null 应不崩');
+
+  /* 主用例：4 个历史周 10/30/45/100 + 本周 5；最佳只算完整周→100，本周 partial、ratio 5%→start */
+  const r = X.weekRecords([mk(MON - 4 * 7 * 864e5, 10), mk(MON - 3 * 7 * 864e5, 30), mk(MON - 2 * 7 * 864e5, 45), mk(MON - 7 * 864e5, 100), mk(MON, 5),
+    { ts: NaN, ex: 'squat', valid: 9 }, null], { today: MON + 2 * 864e5 });
+  if (r.count !== 5) fail('应 5 个周（非法 ts/null 排除）实际 ' + r.count);
+  if (!r.cur || !r.cur.partial || r.cur.points !== 5) fail('本周 partial/5 点');
+  if (!r.record || r.record.points !== 100 || r.record.partial) fail('最佳周应是完整周 100 点');
+  if (r.ratio !== 5 || r.status !== 'start') fail('ratio 5/start 实际 ' + r.ratio + '/' + r.status);
+  if (r.recent.length !== 5 || r.recent[0].start !== MON - 4 * 7 * 864e5 - 12 * 36e5 || r.recent[4].start !== MON - 12 * 36e5) fail('recent 升序且尾为本周');   // MON 是午12点，周起点=当日午夜，故 −12h
+
+  /* 边界：cur=70→close(70%)、cur=30→climb(30%)、cur=100→record(≥最佳、平手也算破纪录) */
+  const rec100 = [mk(MON - 7 * 864e5, 100)];
+  if (X.weekRecords(rec100.concat([mk(MON, 70)]), { today: MON }).status !== 'close') fail('70/100 应 close');
+  if (X.weekRecords(rec100.concat([mk(MON, 30)]), { today: MON }).status !== 'climb') fail('30/100 应 climb');
+  const eq = X.weekRecords(rec100.concat([mk(MON, 100)]), { today: MON });
+  if (eq.status !== 'record' || eq.ratio !== 100) fail('追平最佳应 record/100');
+
+  /* 最佳平手取更近的一周 */
+  const tie = X.weekRecords([mk(MON - 9 * 7 * 864e5, 100), mk(MON - 7 * 864e5, 100)], { today: MON });
+  if (!tie.record || tie.record.start !== MON - 7 * 864e5 - 12 * 36e5) fail('平手应取更近的完整周');
+
+  /* 只有本周、无完整周参照→直接 record */
+  const onlyCur = X.weekRecords([mk(MON, 8)], { today: MON });
+  if (!onlyCur.record && onlyCur.status !== 'record') fail('无历史完整周时本周算破纪录');
+
+  /* recent 最多 8 周：10 个周只留最晚 8 个 */
+  const many = [];
+  for (let i = 9; i >= 0; i--) many.push(mk(MON - i * 7 * 864e5, 1));
+  const m = X.weekRecords(many, { today: MON });
+  if (m.count !== 10 || m.recent.length !== 8 || m.recent[0].start !== MON - 7 * 7 * 864e5 - 12 * 36e5) fail('recent 应截尾 8 周');   // 10 取尾 8：丢掉最旧 2 周，首位是 MON−7 周
+
+  console.log('[wr] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');
