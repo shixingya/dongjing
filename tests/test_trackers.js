@@ -1682,4 +1682,54 @@ function mkHand(tipDist) {
   console.log('[ws] 全部断言通过');
 }
 
+/* ================= v3.19 标准有效率 efficiencyStats ================= */
+{
+  const D = 864e5;
+  const fail = m => { console.log('[ef] FAIL:', m); process.exit(1); };
+  if (typeof X.efficiencyStats !== 'function') fail('efficiencyStats 未导出');
+  const t0 = new Date(2026, 9, 15, 12).getTime();
+  const mk = (off, ex, valid, attempts) => ({ ts: t0 - off * D, ex, mode: 'reps', valid, attempts });
+
+  /* 空/null */
+  const e = X.efficiencyStats([]);
+  if (e.total !== 0 || e.overallRate !== 0 || e.verdict !== 'none' || e.best !== null || e.worst !== null) fail('空数据应 total0/none/best null/worst null');
+  if (X.efficiencyStats(null).total !== 0) fail('null 应不崩');
+
+  /* 主用例：squat 80/100=80% + jack 30/50=60%→总 110/150=73 good；time/game/circuit/无 attempts/null 全排除 */
+  const r = X.efficiencyStats([
+    mk(0, 'squat', 80, 100), mk(1, 'jack', 30, 50),
+    { ts: t0, ex: 'plank', mode: 'time', valid: 60, attempts: 60 },
+    { ts: t0, ex: 'game-collect', mode: 'game', valid: 30, attempts: 30 },
+    { ts: t0, ex: 'circuit', mode: 'reps', valid: 50, attempts: 80 },
+    { ts: t0, ex: 'squat', mode: 'reps', valid: 5 },
+    null
+  ]);
+  if (r.total !== 2 || r.sessions !== 2) fail('只应计两条 reps 真动作 实际 total ' + r.total + ' sessions ' + r.sessions);
+  if (r.overallRate !== 73 || r.verdict !== 'good') fail('期望 overall73/good 实际 ' + r.overallRate + '/' + r.verdict);
+  if (r.totalValid !== 110 || r.totalAttempts !== 150) fail('累加期望 110/150 实际 ' + r.totalValid + '/' + r.totalAttempts);
+  if (r.items[0].id !== 'squat' || r.items[0].rate !== 80) fail('首行应 squat 80 实际 ' + r.items[0].id + '/' + r.items[0].rate);
+  if (r.best.id !== 'squat' || r.worst.id !== 'jack') fail('best squat / worst jack');
+
+  /* 样本不足（总尝试 <10）不下结论 */
+  const few = X.efficiencyStats([mk(0, 'squat', 3, 5)]);
+  if (few.overallRate !== 60 || few.verdict !== 'none') fail('aSum<10 应 verdict none（率仍 60）实际 ' + few.verdict);
+
+  /* great（≥80）/fair（40~60）/low（<40） */
+  if (X.efficiencyStats([mk(0, 'squat', 90, 100)]).verdict !== 'great') fail('90% 应 great');
+  const fa = X.efficiencyStats([mk(0, 'squat', 50, 100)]);
+  if (fa.overallRate !== 50 || fa.verdict !== 'fair') fail('50% 应 fair 实际 ' + fa.verdict);
+  const lo = X.efficiencyStats([mk(0, 'squat', 30, 100)]);
+  if (lo.overallRate !== 30 || lo.verdict !== 'low') fail('30% 应 low 实际 ' + lo.verdict);
+
+  /* 封顶：valid>attempts 脏数据时 rate 不超 100 */
+  const cl = X.efficiencyStats([mk(0, 'squat', 90, 50)]);
+  if (cl.overallRate !== 100 || cl.items[0].rate !== 100) fail('valid>attempts 应封顶 100 实际 ' + cl.overallRate + '/' + cl.items[0].rate);
+
+  /* 分动作聚合：同一动作两节累加 */
+  const agg = X.efficiencyStats([mk(0, 'squat', 10, 20), mk(1, 'squat', 20, 20)]);
+  if (agg.total !== 1 || agg.items[0].sessions !== 2 || agg.items[0].rate !== 75) fail('squat 两节应聚合 1 行/2 节/30÷40=75 实际 ' + agg.items[0].sessions + '/' + agg.items[0].rate);
+
+  console.log('[ef] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

@@ -1566,7 +1566,7 @@
     { t: '成就', s: '.ach-card' }, { t: '时段', s: '.dp-card' }, { t: '最佳', s: '.pb-card' },
     { t: '星期', s: '.wd-card' }, { t: '部位', s: '.bc-card' }, { t: '纠错', s: '.it-card' },
     { t: '构成', s: '.ms-card' }, { t: '走势', s: '.st-card' }, { t: '节奏', s: '.tc-card' },
-    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '月度', s: '.mt-card' }, { t: '高光', s: '.ts-card' }, { t: '均衡', s: '.tb-card' }, { t: '稳定', s: '.ws-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
+    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '月度', s: '.mt-card' }, { t: '高光', s: '.ts-card' }, { t: '均衡', s: '.tb-card' }, { t: '稳定', s: '.ws-card' }, { t: '效率', s: '.ef-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
   ];
   function renderRepNav() {
     const nav = $('#rep-nav'); if (!nav) return;
@@ -1611,6 +1611,7 @@
     renderTop();
     renderBalance();
     renderStability();
+    renderEfficiency();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -2006,6 +2007,23 @@
     const VD = { steady: '周周稳·起伏很小', moderate: '有点起伏·还在掌控', variable: '大起大落·试着把弱的一周补上', none: '完整周样本还少·先坚持几周' };
     const CLS = { steady: 'good', moderate: '', variable: 'warn', none: '' };
     if (sum) sum.innerHTML = (ws.verdict === 'none') ? VD.none : ('周均 <b>' + ws.meanPoints + '</b> 点·波动 <span class="ws-verdict ' + (CLS[ws.verdict] || '') + '">' + (VD[ws.verdict] || '') + '</span>');
+  }
+
+  /* v3.19 标准有效率：efficiencyStats 纯逻辑算 reps 真动作的有效/尝试通过比，这里画行条 */
+  function renderEfficiency() {
+    const box = $('#ef-rows'); if (!box) return;
+    const sum = $('#ef-sum');
+    const ef = X.efficiencyStats(DB.records);
+    if (!ef.total) { box.innerHTML = '<div class="empty-tip">还没有可统计的记录，做几组标准动作这里会算你的有效率</div>'; if (sum) sum.textContent = ''; return; }
+    box.innerHTML = ef.items.slice(0, 6).map(it =>
+      '<div class="ef-row" title="' + it.name + ' · 有效 ' + it.valid + ' / 尝试 ' + it.attempts + '（' + it.sessions + ' 节）">' +
+      '<span class="ef-ico">' + it.ico + '</span>' +
+      '<span class="ef-name">' + it.name + '</span>' +
+      '<span class="ef-track"><i style="width:' + it.rate + '%"></i></span>' +
+      '<b class="ef-num">' + it.rate + '%</b></div>').join('');
+    const VD = { great: '动作很标准·保持住', good: '大部分都做到标准了', fair: '标准率一般·慢一点做扎实', low: '先把动作做标准·宁少勿滥', none: '' };
+    const CLS = { great: 'good', good: 'good', fair: 'warn', low: 'warn', none: '' };
+    if (sum) sum.innerHTML = '总标准率 <span class="ef-verdict ' + (CLS[ef.verdict] || '') + '">' + ef.overallRate + '%</span>' + (ef.total > 1 && ef.worst ? ' · 待加强「' + ef.worst.name + '」' : '');
   }
 
   /* ---------------- 我的 / Pro ---------------- */

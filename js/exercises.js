@@ -1868,12 +1868,47 @@
     return { weeks, count, meanPoints: Math.round(mean), cv, avgDays, activeWeeks, verdict };
   }
 
+  /* ================= 标准有效率（v3.19）=================
+   * 看动作做得标不标准：把 reps 模式真动作记录的「有效次数 / 尝试次数」汇总成比率。
+   * 与评分正交：score 是单节表现分（综合质量），这里是最客观的“做了多少下、其中多少下
+   * 过得了标准门”的通过比例。只取 mode==='reps' 且 attempts>0 的记录（time/game 存
+   * attempts==valid 恒 100%、无意义，故不计），circuit/game 哨兵值因不在动作库自然排除。
+   * 非有限 valid/attempts/未知 id/null 丢弃不崩。 */
+  function efficiencyStats(records) {
+    const meta = {};
+    EXERCISES.forEach(e => { meta[e.id] = e; });
+    const rs = (Array.isArray(records) ? records : [])
+      .filter(r => r && meta[r.ex] && r.mode === 'reps' && Number.isFinite(r.valid) && Number.isFinite(r.attempts) && r.attempts > 0);
+    let vSum = 0, aSum = 0;
+    const byId = {};
+    rs.forEach(r => {
+      vSum += r.valid; aSum += r.attempts;
+      let b = byId[r.ex] || (byId[r.ex] = { id: r.ex, name: meta[r.ex].name, ico: meta[r.ex].ico, valid: 0, attempts: 0, sessions: 0 });
+      b.valid += r.valid; b.attempts += r.attempts; b.sessions++;
+    });
+    const items = Object.keys(byId).map(id => {
+      const b = byId[id];
+      return { id, name: b.name, ico: b.ico, sessions: b.sessions, valid: b.valid, attempts: b.attempts,
+        rate: Math.min(100, Math.round(b.valid / b.attempts * 100)) };
+    }).sort((a, b) => b.rate - a.rate || b.sessions - a.sessions || a.name.localeCompare(b.name, 'zh'));
+    const overallRate = aSum ? Math.min(100, Math.round(vSum / aSum * 100)) : 0;
+    let verdict = 'none';
+    if (aSum >= 10) {
+      if (overallRate >= 80) verdict = 'great';
+      else if (overallRate >= 60) verdict = 'good';
+      else if (overallRate >= 40) verdict = 'fair';
+      else verdict = 'low';
+    }
+    return { items, total: items.length, sessions: rs.length, totalValid: vSum, totalAttempts: aSum, overallRate, verdict,
+      best: items[0] || null, worst: items.length ? items[items.length - 1] : null };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend, topSessions, trainingBalance, weekStability,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend, topSessions, trainingBalance, weekStability, efficiencyStats,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,
