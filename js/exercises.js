@@ -1187,12 +1187,13 @@
     const now = Number(o.now || o.today) || Date.now();
     const exTotal = EXERCISES.length;
     const exIds = new Set(EXERCISES.map(e => e.id));
-    let points = 0, secsSum = 0, hasCircuit = false, hasGame = false;
+    let points = 0, secsSum = 0, calSum = 0, hasCircuit = false, hasGame = false;
     const exSeen = new Set();
     records.forEach(r => {
       if (!r) return;
       points += recPoints(r);
       if (Number.isFinite(r.secs) && r.secs > 0) secsSum += r.secs;
+      if (Number.isFinite(r.cal) && r.cal > 0) calSum += r.cal;
       if (r.ex && exIds.has(r.ex)) exSeen.add(r.ex);
       if (r.ex === 'circuit') hasCircuit = true;
       if (r.mode === 'game' || (r.ex && String(r.ex).indexOf('game-') === 0)) hasGame = true;
@@ -1201,10 +1202,14 @@
     /* v3.9 新徽章口径：目标连达走 goalProfile（限幅 60 天窗口），未设目标则永远 0 */
     const goal = Math.max(0, (d.set && d.set.dailyGoal) | 0);
     const gp = goal > 0 ? goalProfile(records, { today: now, dailyGoal: goal, days: 60 }) : null;
+    /* v3.12 新徽章口径：单周冠军直接拿 weekRecords 各周点数峰值（含进行中的本周，当周冲到就算） */
+    const wr = weekRecords(records, { today: now });
+    const weekBest = wr.weeks.reduce((mx, w) => Math.max(mx, w.points), 0);
     const cur = {
       count: records.length, ex: exSeen.size, streak: st.cur,
       points: Math.round(points), circuit: hasCircuit ? 1 : 0, game: hasGame ? 1 : 0, posture: posture.length,
-      hitStreak: gp ? gp.longestHitStreak : 0, mins: Math.round(secsSum / 60)
+      hitStreak: gp ? gp.longestHitStreak : 0, mins: Math.round(secsSum / 60),
+      cals: Math.round(calSum), weekBest
     };
     const defs = [
       { id: 'first',     ico: '\ud83c\udf31', name: '开始出发',   desc: '完成第一次训练',        kind: 'count',   target: 1 },
@@ -1217,7 +1222,9 @@
       { id: 'gamer',     ico: '\ud83c\udfae', name: '玩家上线',   desc: '玩过一次体感关卡',        kind: 'game',    target: 1 },
       { id: 'posture',   ico: '\ud83e\uddcd', name: '体态初评',   desc: '做过一次体态评估',        kind: 'posture', target: 1 },
       { id: 'goalie',    ico: '\ud83c\udfaf', name: '目标达人',   desc: '连续 7 天达成每日目标',    kind: 'hitStreak', target: 7 },
-      { id: 'endurance', ico: '\u23f1\ufe0f', name: '时长收藏家', desc: '累计运动满 300 分钟',      kind: 'mins',    target: 300 }
+      { id: 'endurance', ico: '\u23f1\ufe0f', name: '时长收藏家', desc: '累计运动满 300 分钟',      kind: 'mins',    target: 300 },
+      { id: 'burner',    ico: '\ud83d\udca5', name: '燃脂达人',   desc: '累计消耗满 1000 千卡',      kind: 'cals',    target: 1000 },
+      { id: 'weekchamp', ico: '\ud83c\udfc6', name: '单周冠军',   desc: '单周训练点满 100',        kind: 'weekBest', target: 100 }
     ];
     const list = defs.map(b => {
       const c = cur[b.kind] || 0;

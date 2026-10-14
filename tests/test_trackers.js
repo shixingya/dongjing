@@ -733,11 +733,13 @@ function mkHand(tipDist) {
   const nowNoon = t0 + 12 * 3600e3;
   const mk = (off, ex, mode, valid) => ({ ts: t0 - off * D, ex, mode, valid });
 
-  /* --- 空数据：全未解锁、total=11（v3.9 加 goalie/endurance 后）--- */
+  /* --- 空数据：全未解锁、total=13（v3.12 加 burner/weekchamp 后）--- */
   const zero = X.computeAchievements({ records: [], posture: [] }, { now: nowNoon });
-  if (zero.total !== 11) fail('徽章数期望 11 实际 ' + zero.total);
+  if (zero.total !== 13) fail('徽章数期望 13 实际 ' + zero.total);
   if (zero.earned !== 0) fail('空数据不应有解锁');
   if (zero.list[0].id !== 'first' || zero.list[0].earned) fail('first 应未解锁');
+  if (zero.list.find(b => b.id === 'burner').cur !== 0) fail('空数据 burner 应 0');
+  if (zero.list.find(b => b.id === 'weekchamp').cur !== 0) fail('空数据 weekchamp 应 0');
   console.log('[ach] 空数据 OK, total =', zero.total);
 
   /* --- 混合数据：口径与 streak 自洽 --- */
@@ -778,6 +780,31 @@ function mkHand(tipDist) {
   if (achN.list.find(b => b.id === 'goalie').cur !== 0) fail('未设目标 goalie 应 0');
   if (res.list.find(b => b.id === 'goalie').cur !== 0 || res.list.find(b => b.id === 'endurance').cur !== 0) fail('混合数据两枚新徽章应锁住（无 set/无 secs）');
   if (res.earned !== 4) fail('加徽章后混合数据解锁数仍应 4 实际 ' + res.earned);
+  /* 混合数据无千卡、单周点不足 100 → burner/weekchamp 锁住、不扰动 earned */
+  if (res.list.find(b => b.id === 'burner').cur !== 0) fail('混合数据无 cal，burner 应 0');
+  if (res.list.find(b => b.id === 'weekchamp').earned) fail('混合数据单周点 <100，weekchamp 应锁住');
+
+  /* --- v3.12 新徽章：burner 累计千卡、weekchamp 单周冠军 --- */
+  const calRecs = [];
+  for (let i = 0; i < 10; i++) calRecs.push({ ts: t0 - i * D + 36e5, ex: 'squat', mode: 'reps', valid: 5, cal: 100 });
+  const achB = X.computeAchievements({ records: calRecs, posture: [] }, { now: nowNoon });
+  const bn = achB.list.find(b => b.id === 'burner');
+  if (!bn || !bn.earned) fail('burner：累计 1000 千卡应解锁 实际 cur ' + (bn && bn.cur));
+  if (bn.cur !== 1000) fail('burner cur 期望 1000 实际 ' + bn.cur);
+  /* 差一点：9 条 900 千卡不解锁 */
+  const achB2 = X.computeAchievements({ records: calRecs.slice(0, 9), posture: [] }, { now: nowNoon });
+  if (achB2.list.find(b => b.id === 'burner').earned) fail('burner：900 千卡不应解锁');
+  /* weekchamp：本周单条 reps 120 点 → 单周峰值 120 ≥100 解锁、cur 封顶 100 */
+  const wcRecs = [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 120 }];
+  const achW = X.computeAchievements({ records: wcRecs, posture: [] }, { now: nowNoon });
+  const wcp = achW.list.find(b => b.id === 'weekchamp');
+  if (!wcp || !wcp.earned) fail('weekchamp：单周 120 点应解锁 实际 cur ' + (wcp && wcp.cur));
+  if (wcp.cur !== 100) fail('weekchamp cur 封顶 100 实际 ' + wcp.cur);
+  /* 拆成两周各 60 点 → 无单周满 100，weekchamp 锁住 */
+  const wcSplit = [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 60 }, { ts: t0 - 5 * D + 36e5, ex: 'squat', mode: 'reps', valid: 60 }];
+  const achW2 = X.computeAchievements({ records: wcSplit, posture: [] }, { now: nowNoon });
+  if (achW2.list.find(b => b.id === 'weekchamp').earned) fail('weekchamp：两周各 60 点不应解锁');
+  console.log('[ach] burner/weekchamp OK (cal 1000 / weekBest 120)');
 
   console.log('[ach] 全部断言通过');
 }
