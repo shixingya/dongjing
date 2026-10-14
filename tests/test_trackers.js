@@ -733,9 +733,9 @@ function mkHand(tipDist) {
   const nowNoon = t0 + 12 * 3600e3;
   const mk = (off, ex, mode, valid) => ({ ts: t0 - off * D, ex, mode, valid });
 
-  /* --- 空数据：全未解锁、total=9 --- */
+  /* --- 空数据：全未解锁、total=11（v3.9 加 goalie/endurance 后）--- */
   const zero = X.computeAchievements({ records: [], posture: [] }, { now: nowNoon });
-  if (zero.total !== 9) fail('徽章数期望 9 实际 ' + zero.total);
+  if (zero.total !== 11) fail('徽章数期望 11 实际 ' + zero.total);
   if (zero.earned !== 0) fail('空数据不应有解锁');
   if (zero.list[0].id !== 'first' || zero.list[0].earned) fail('first 应未解锁');
   console.log('[ach] 空数据 OK, total =', zero.total);
@@ -764,6 +764,20 @@ function mkHand(tipDist) {
   const full = X.computeAchievements({ records: allEx, posture: [] }, { now: nowNoon });
   if (!full.list.find(b => b.id === 'explorer').earned) fail('练过全部动作应解锁 explorer');
   console.log('[ach] explorer 全解锁 OK (target=' + X.EXERCISES.length + ')');
+
+  /* --- v3.9 新徽章：goalie 连达 7 天目标、endurance 累计 300 分钟 --- */
+  const goalRecs = [];
+  for (let i = 0; i < 7; i++) goalRecs.push({ ts: t0 - i * D + 36e5, ex: 'squat', mode: 'reps', valid: 25, secs: 3600 });
+  const achG = X.computeAchievements({ records: goalRecs, posture: [], set: { dailyGoal: 20 } }, { now: nowNoon });
+  const gg = achG.list.find(b => b.id === 'goalie');
+  if (!gg || !gg.earned) fail('goalie：每天 25 点≥目标 20 连 7 天应解锁 实际 cur ' + (gg && gg.cur));
+  const en = achG.list.find(b => b.id === 'endurance');
+  if (!en || !en.earned) fail('endurance：累计 420 分钟≥300 应解锁 实际 cur ' + (en && en.cur));
+  /* 未设目标时 goalie 永远 0；混合数据（无 set/无 secs）两枚新徽章不解锁、earned 仍 4 */
+  const achN = X.computeAchievements({ records: goalRecs, posture: [] }, { now: nowNoon });
+  if (achN.list.find(b => b.id === 'goalie').cur !== 0) fail('未设目标 goalie 应 0');
+  if (res.list.find(b => b.id === 'goalie').cur !== 0 || res.list.find(b => b.id === 'endurance').cur !== 0) fail('混合数据两枚新徽章应锁住（无 set/无 secs）');
+  if (res.earned !== 4) fail('加徽章后混合数据解锁数仍应 4 实际 ' + res.earned);
 
   console.log('[ach] 全部断言通过');
 }

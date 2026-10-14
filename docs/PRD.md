@@ -145,6 +145,8 @@
 
 - ✅ **v3.8 已交付（评分分布：不分时间看整体质量落在哪）**：① `scoreDistribution(records)` 纯函数—只取有限 ts + 有限 `score>0` 的记录，按 `SCORE_BUCKETS` 四档（待改进 <60 / 合格 60–74 / 良好 75–89 / 优秀 90+，逐档带专属色）分桶，返回 `{n,avg,buckets[{key,name,c,count,pct}],dominantKey,dominantName}`；② **与走势/提升完全正交**：scoreTrend 看时间轴上的轨迹、improvementStats 看逐动作进退、本卡看不分时间的整体质量分布；平手时主导档保守取靠前档位（宁可报低不报高）；无 score/score<=0/非有限 ts/null 全排除不崩；③ **视觉差异化**（报告页行条卡已够多）：不用第五排横向条，改一条按节数加权的堆叠占比条（flex=count）+ 四档图例（主导档加粗高亮），hover 看各档节数与占比，副标题“共 N 节有评分 · 均分 X · 多在「Y」”；导航 chips 增至 18 枚（新增「评分」）；④ 单测覆盖恰 4 档、空/null n0/dominant null、边界归属（50/60/74/75/89/90/100 逐一验段界，n7/avg77/分档 1-2-2-2/pct 29/平手→pass）、非法排除、单一档全命中 pct100；浏览器冒烟注入 7 节递升评分，纯函数 n/avg/四档计数占比、DOM 堆叠 4 段 flex/色序、图例 dom 标记、副标题与 `DJX.scoreDistribution` 逐项零偏差（15/15 PASS）、chipCount=18、点「评分」chip 直达 .sc-card、0 console error。
 
+- ✅ **v3.9 已交付（成就墙扩容两枚：把新口径接进留存系统而不是继续加报表卡）**：① `computeAchievements` 新增 🎯 goalie「目标达人」（kind `hitStreak`，target 7：连续 7 天达成每日目标）与 ⏱️ endurance「时长收藏家」（kind `mins`，target 300：累计运动满 300 分钟），徽章 9→11；② **连达口径零创新**：hitStreak 直接复用 v3.7 `goalProfile(records,{today,dailyGoal:goal,days:60}).longestHitStreak`（recPoints 自然日分桶 + 今天未达从昨天起算同一套），未设目标（dailyGoal<=0）时进度恒 0 不瞎判；mins 逐条累加有限 `secs>0` 的真实时长取整，不用 cal/估算替代；③ **零 UI 改动自动上线**：成就墙 `ach.list.map` 与“已点亮 X / N 枚”全数据驱动，只改 exercises.js 定义 + 单测即完；④ 单测覆盖空数据 total 11、goalie/endurance 解锁路径（7 天×25 点 dailyGoal=20 + secs3600→420 分）、未设目标 goalie 恒 0、混合数据两枚新徽章锁住且 earned 不受扰动；浏览器冒烟注入 7 天×25 点×secs3600 数据，纯函数与 DOM 交叉 total=11、goalie 7/7 亮、endurance earned（cur 按 target 截断 300/300）、副标题“已点亮 4 / 11 枚”，改 dailyGoal=0 后 goalie 变灰锁住，全程 0 console error（5/5 PASS）。
+
 ### P2
 
 - B 端企业健康：团队打卡看板、批量授权码、周报推送（对标慧动/ROR 主盈利线）；
