@@ -1752,12 +1752,36 @@
     return { months, recent: months.slice(-span), count: months.length, cur, best, prev, mom, trend, firstAvg, lastAvg, span };
   }
 
+  /* ================= 高光时刻榜（v3.13）=================
+   * 跨全部记录挑出评分最高的前 N 单节（不分动作），拼成一张荣誉榜。与 v2.5 最佳榜
+   * 互补：personalBests 按动作各自取峰、本榜把所有动作放一起排座次。只认真动作库 id
+   * （game-/circuit 哨兵值不计入，与最佳榜同一口径）、非有限 ts / score<=0 丢弃不崩。
+   * 排序 score 降序、平手取更近的一节。点数继续复用 recPoints。 */
+  function topSessions(records, opts) {
+    const o = opts || {};
+    const n = Math.max(1, Math.min(10, (o.n === undefined ? 5 : (o.n | 0))));
+    const meta = {};
+    EXERCISES.forEach(e => { meta[e.id] = e; });
+    const label = t => { const x = new Date(t); return (x.getMonth() + 1) + '/' + x.getDate(); };
+    const rs = (Array.isArray(records) ? records : [])
+      .filter(r => r && meta[r.ex] && Number.isFinite(r.ts) && Number.isFinite(r.score) && r.score > 0);
+    rs.sort((a, b) => (b.score - a.score) || (b.ts - a.ts));
+    const items = rs.slice(0, n).map((r, i) => {
+      const m = meta[r.ex];
+      return { rank: i + 1, ts: r.ts, id: r.ex, name: m.name, ico: m.ico, mode: m.mode,
+        score: Math.round(r.score), points: Math.round(recPoints(r)), date: label(r.ts) };
+    });
+    const best = items[0] || null;
+    const avgTop = items.length ? Math.round(items.reduce((s, it) => s + it.score, 0) / items.length) : 0;
+    return { items, count: items.length, total: rs.length, best, avgTop };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend, topSessions,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

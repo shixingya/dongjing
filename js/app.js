@@ -1566,7 +1566,7 @@
     { t: '成就', s: '.ach-card' }, { t: '时段', s: '.dp-card' }, { t: '最佳', s: '.pb-card' },
     { t: '星期', s: '.wd-card' }, { t: '部位', s: '.bc-card' }, { t: '纠错', s: '.it-card' },
     { t: '构成', s: '.ms-card' }, { t: '走势', s: '.st-card' }, { t: '节奏', s: '.tc-card' },
-    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '月度', s: '.mt-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
+    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '月度', s: '.mt-card' }, { t: '高光', s: '.ts-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
   ];
   function renderRepNav() {
     const nav = $('#rep-nav'); if (!nav) return;
@@ -1608,6 +1608,7 @@
     renderScoreDist();
     renderWeekRec();
     renderMonthly();
+    renderTop();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1954,6 +1955,21 @@
     const TR = { up: { t: '跨月看训练量在往上走 ↑', c: 'up' }, down: { t: '最近几个月不如之前 ↓', c: 'down' }, flat: { t: '训练量保持平稳・', c: '' }, none: { t: '再多练几个月就能看出长期趋势', c: '' } };
     const tr = TR[mt.trend] || TR.none;
     if (sum) sum.innerHTML = (mt.best ? ('最佳月 ' + mt.best.label + ' ' + mt.best.points + ' 点 · ') : '') + '<span class="mt-verdict ' + tr.c + '">' + tr.t + '</span>';
+  }
+
+  /* 高光时刻榜：topSessions 纯逻辑挑出评分最高的前 5 单节（不分动作），这里画荣誉榜行列表 */
+  function renderTop() {
+    const box = $('#ts-list'); if (!box) return;
+    const sum = $('#ts-sum');
+    const ts = X.topSessions(DB.records, { n: 5 });
+    if (!ts.count) { box.innerHTML = '<div class="empty-tip">还没有带评分的训练记录，练几节这里会列出你分数最高的荣耀时刻</div>'; if (sum) sum.textContent = ''; return; }
+    box.innerHTML = ts.items.map(it =>
+      '<div class="ts-row' + (it.rank === 1 ? ' top' : '') + '" title="' + it.name + ' · ' + it.date + ' · 表现分 ' + it.score + ' · ' + it.points + ' 训练点">' +
+      '<span class="ts-rank">' + it.rank + '</span>' +
+      '<span class="ts-ico">' + it.ico + '</span>' +
+      '<div class="ts-main"><b>' + it.name + '</b><span class="ts-sub">' + fmtDate(it.ts) + '</span></div>' +
+      '<b class="ts-score">' + it.score + '<small>分</small></b></div>').join('');
+    if (sum) sum.textContent = '最佳 ' + ts.best.name + ' ' + ts.best.score + ' 分 · 前 ' + ts.count + ' 节均分 ' + ts.avgTop;
   }
 
   /* ---------------- 我的 / Pro ---------------- */

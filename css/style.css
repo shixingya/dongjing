@@ -535,6 +535,18 @@ h3{font-size:18px}
 .mt-verdict{font-weight:700}
 .mt-verdict.up{color:var(--hl)}
 .mt-verdict.down{color:var(--warn)}
+/* ---- v3.13 高光时刻榜 ---- */
+.ts-list{display:flex; flex-direction:column; margin-top:6px}
+.ts-row{display:grid; grid-template-columns:22px 26px 1fr auto; align-items:center; gap:10px; padding:9px 4px; border-bottom:1px solid var(--line)}
+.ts-row:last-child{border-bottom:none}
+.ts-rank{font-size:13px; font-weight:700; color:var(--muted); text-align:center}
+.ts-ico{font-size:19px; text-align:center}
+.ts-main{display:flex; flex-direction:column; gap:2px; min-width:0}
+.ts-main b{font-size:14px; color:var(--txt)}
+.ts-sub{font-size:11.5px; color:var(--muted)}
+.ts-score{font-size:16px; color:var(--hl2); font-weight:800; white-space:nowrap}
+.ts-score small{font-size:10px; font-weight:600; color:var(--muted); margin-left:2px}
+.ts-row.top .ts-rank,.ts-row.top .ts-score{color:var(--hl)}
 
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}

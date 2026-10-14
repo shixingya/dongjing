@@ -1436,4 +1436,55 @@ function mkHand(tipDist) {
   console.log('[mt] 全部断言通过');
 }
 
+/* ================= v3.13 高光时刻榜 topSessions ================= */
+{
+  const D = 864e5;
+  const fail = m => { console.log('[top] FAIL:', m); process.exit(1); };
+  if (typeof X.topSessions !== 'function') fail('topSessions 未导出');
+  const t0 = new Date(2026, 9, 15, 12).getTime();
+  const mk = (off, ex, sc, valid) => ({ ts: t0 - off * D, ex, mode: 'reps', valid: valid || 10, score: sc });
+
+  /* 空/null */
+  const e = X.topSessions([], {});
+  if (e.items.length !== 0 || e.count !== 0 || e.best !== null || e.avgTop !== 0) fail('空数据应 items0/count0/best null/avgTop0');
+  if (X.topSessions(null, {}).count !== 0) fail('null 应不崩');
+
+  /* n 限幅：默认 5、0→1、50→10 */
+  const many = []; for (let i = 0; i < 12; i++) many.push(mk(i, 'squat', 50 + i));
+  if (X.topSessions(many, {}).items.length !== 5) fail('默认取 5');
+  if (X.topSessions(many, { n: 0 }).items.length !== 1) fail('n=0 应限幅 1');
+  if (X.topSessions(many, { n: 50 }).items.length !== 10) fail('n=50 应限幅 10');
+
+  /* 排序 score 降序 + 平手取更近 + total 计数 + best */
+  const r = X.topSessions([mk(5, 'squat', 80), mk(4, 'jack', 95), mk(3, 'plank', 80), mk(2, 'squat', 60)], { n: 5 });
+  if (r.items[0].id !== 'jack' || r.items[0].score !== 95) fail('榜首应 jack 95 实际 ' + r.items[0].id + '/' + r.items[0].score);
+  if (r.items[1].id !== 'plank') fail('平手 80 应取更近的 plank 实际 ' + r.items[1].id);
+  if (r.items[2].id !== 'squat') fail('次一个 80 应是更早的 squat');
+  if (r.total !== 4) fail('total 应 4 实际 ' + r.total);
+  if (r.best.id !== 'jack') fail('best 应 = items[0] jack');
+
+  /* 过滤：game-/circuit/非法 ts/score<=0 全排除 */
+  const mix = X.topSessions([
+    mk(1, 'squat', 88),
+    { ts: t0, ex: 'game-collect', mode: 'game', valid: 30, score: 99 },
+    { ts: t0, ex: 'circuit', mode: 'reps', valid: 10, score: 97 },
+    { ts: NaN, ex: 'jack', mode: 'reps', valid: 10, score: 90 },
+    mk(2, 'plank', 0),
+    mk(3, 'pushup', -5),
+    { ts: t0 - D, ex: 'sidraise', mode: 'reps', valid: 12, score: 76 }
+  ], { n: 5 });
+  if (mix.count !== 2) fail('应只剩 squat+sidraise 两条真动作有分 实际 ' + mix.count);
+  if (mix.items[0].id !== 'squat' || mix.items[1].id !== 'sidraise') fail('过滤后排序应 squat→sidraise 实际 ' + mix.items.map(x => x.id));
+
+  /* points 复用 recPoints：reps valid20 → 20 点 */
+  const p = X.topSessions([{ ts: t0, ex: 'squat', mode: 'reps', valid: 20, score: 90 }], {});
+  if (p.items[0].points !== 20) fail('reps 点数应 = valid 20 实际 ' + p.items[0].points);
+
+  /* avgTop：榜首均分 */
+  const av = X.topSessions([mk(1, 'squat', 80), mk(2, 'jack', 100)], { n: 2 });
+  if (av.avgTop !== 90) fail('avgTop 期望 90 实际 ' + av.avgTop);
+
+  console.log('[top] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');
