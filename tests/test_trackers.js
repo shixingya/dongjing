@@ -1510,4 +1510,54 @@ function mkHand(tipDist) {
   console.log('[top] 全部断言通过');
 }
 
+/* ================= v3.15 训练均衡度 trainingBalance ================= */
+{
+  const D = 864e5;
+  const fail = m => { console.log('[tb] FAIL:', m); process.exit(1); };
+  if (typeof X.trainingBalance !== 'function') fail('trainingBalance 未导出');
+  const t0 = new Date(2026, 9, 15, 12).getTime();
+  const mk = (off, ex) => ({ ts: t0 - off * D, ex, mode: 'reps', valid: 10 });
+
+  /* 空/null */
+  const e = X.trainingBalance([]);
+  if (e.total !== 0 || e.distinct !== 0 || e.topShare !== 0 || e.verdict !== 'none' || e.topName !== '') fail('空数据应 total0/none');
+  if (X.trainingBalance(null).total !== 0) fail('null 应不崩');
+
+  /* 样本不足（<5 节）verdict none */
+  const few = X.trainingBalance([mk(0, 'squat'), mk(1, 'squat'), mk(2, 'jack')]);
+  if (few.total !== 3 || few.verdict !== 'none') fail('<5 节应 verdict none 实际 ' + few.verdict);
+
+  /* solo：只练一个动作（5 节全 squat）→ topShare 100、solo */
+  const solo = X.trainingBalance([0, 1, 2, 3, 4].map(i => mk(i, 'squat')));
+  if (solo.distinct !== 1 || solo.topShare !== 100 || solo.verdict !== 'solo') fail('5 节全 squat 应 solo/100 实际 ' + solo.verdict + '/' + solo.topShare);
+
+  /* biased：最勤占比 ≥60 */
+  const biased = X.trainingBalance([mk(0,'squat'),mk(1,'squat'),mk(2,'squat'),mk(3,'squat'),mk(4,'squat'),mk(5,'squat'),mk(6,'jack'),mk(7,'jack')]);
+  if (biased.topShare !== 75 || biased.verdict !== 'biased') fail('squat 6/8 应 biased 75 实际 ' + biased.verdict + '/' + biased.topShare);
+  if (biased.items[0].id !== 'squat' || biased.items[0].sessions !== 6) fail('首行应 squat 6');
+  if (biased.distinct !== 2) fail('distinct 应 2');
+
+  /* balanced：分布均匀 topShare ≤35 */
+  const balanced = X.trainingBalance([mk(0,'squat'),mk(1,'jack'),mk(2,'plank'),mk(3,'pushup'),mk(4,'lunge'),mk(5,'highknees')]);
+  if (balanced.topShare !== 17 || balanced.verdict !== 'balanced') fail('6 动作各 1 应 balanced 17 实际 ' + balanced.verdict + '/' + balanced.topShare);
+  if (balanced.distinct !== 6) fail('distinct 应 6');
+
+  /* normal：介于 35~60 之间 */
+  const normal = X.trainingBalance([mk(0,'squat'),mk(1,'squat'),mk(2,'squat'),mk(3,'jack'),mk(4,'jack'),mk(5,'plank'),mk(6,'plank'),mk(7,'pushup')]);
+  if (normal.topShare !== 38 || normal.verdict !== 'normal') fail('topShare 38 应 normal 实际 ' + normal.verdict + '/' + normal.topShare);
+
+  /* 过滤 game-/circuit/非法 ts/未知 id/null */
+  const filt = X.trainingBalance([
+    mk(0, 'squat'), mk(1, 'jack'),
+    { ts: t0, ex: 'game-collect', mode: 'game', valid: 3 },
+    { ts: t0, ex: 'circuit', mode: 'reps', valid: 5 },
+    { ts: NaN, ex: 'plank', mode: 'reps', valid: 5 },
+    { ts: t0 - 2 * D, ex: 'unknown-ex', mode: 'reps', valid: 5 },
+    null
+  ]);
+  if (filt.total !== 2 || filt.distinct !== 2) fail('只应计 squat+jack 两真动作 实际 total ' + filt.total + ' distinct ' + filt.distinct);
+
+  console.log('[tb] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

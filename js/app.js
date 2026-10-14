@@ -1566,7 +1566,7 @@
     { t: '成就', s: '.ach-card' }, { t: '时段', s: '.dp-card' }, { t: '最佳', s: '.pb-card' },
     { t: '星期', s: '.wd-card' }, { t: '部位', s: '.bc-card' }, { t: '纠错', s: '.it-card' },
     { t: '构成', s: '.ms-card' }, { t: '走势', s: '.st-card' }, { t: '节奏', s: '.tc-card' },
-    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '月度', s: '.mt-card' }, { t: '高光', s: '.ts-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
+    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '月度', s: '.mt-card' }, { t: '高光', s: '.ts-card' }, { t: '均衡', s: '.tb-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
   ];
   function renderRepNav() {
     const nav = $('#rep-nav'); if (!nav) return;
@@ -1609,6 +1609,7 @@
     renderWeekRec();
     renderMonthly();
     renderTop();
+    renderBalance();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1970,6 +1971,24 @@
       '<div class="ts-main"><b>' + it.name + '</b><span class="ts-sub">' + fmtDate(it.ts) + '</span></div>' +
       '<b class="ts-score">' + it.score + '<small>分</small></b></div>').join('');
     if (sum) sum.textContent = '最佳 ' + ts.best.name + ' ' + ts.best.score + ' 分 · 前 ' + ts.count + ' 节均分 ' + ts.avgTop;
+  }
+
+  /* 训练均衡度：trainingBalance 纯逻辑看节数在动作间怎么分布，这里画最勤几个动作占比行 + 偏科定性 */
+  function renderBalance() {
+    const box = $('#tb-rows'); if (!box) return;
+    const sum = $('#tb-sum');
+    const tb = X.trainingBalance(DB.records);
+    if (!tb.total) { box.innerHTML = '<div class="empty-tip">还没有训练记录，多练几个动作这里会告诉你偏不偏科</div>'; if (sum) sum.textContent = ''; return; }
+    const max = Math.max(1, ...tb.items.map(it => it.sessions));
+    box.innerHTML = tb.items.slice(0, 6).map(it =>
+      '<div class="tb-row" title="' + it.name + ' · 练过 ' + it.sessions + ' 节 · 占 ' + it.pct + '%">' +
+      '<span class="tb-ico">' + it.ico + '</span>' +
+      '<span class="tb-name">' + it.name + '</span>' +
+      '<span class="tb-track"><i style="width:' + Math.round(it.sessions / max * 100) + '%"></i></span>' +
+      '<b class="tb-num">' + it.pct + '%</b></div>').join('');
+    const VD = { solo: '只盯一个动作练，试试换换口味', biased: '有点偏科·最勤的「' + tb.topName + '」占了 ' + tb.topShare + '%', normal: '最勤的占 ' + tb.topShare + '%·还算适中', balanced: '动作分布挺均衡·最勤也只占 ' + tb.topShare + '%', none: '' };
+    const CLS = { solo: 'warn', biased: 'warn', normal: '', balanced: 'good', none: '' };
+    if (sum) sum.innerHTML = '共 ' + tb.distinct + ' 个动作 · <span class="tb-verdict ' + (CLS[tb.verdict] || '') + '">' + (VD[tb.verdict] || '') + '</span>';
   }
 
   /* ---------------- 我的 / Pro ---------------- */

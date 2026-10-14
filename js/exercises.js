@@ -1782,12 +1782,40 @@
     return { items, count: items.length, total: rs.length, best, avgTop };
   }
 
+  /* ================= 训练均衡度（v3.15）=================
+   * 看你会不会“总恰同一个动作”：把节数按真动作分布开，算最勤一个动作的占比
+   * （topShare），据此起“偏科 / 较均衡 / 高度集中”的定性。与 v2.7 部位覆盖度互补：
+   * 那个看哪块部位没练（缺项），这个看已练的动作之间集不集中（偏科）。
+   * 只认真动作库 id（game-/circuit 不计入、与最佳榜/高光榜同一口径）、非有限 ts/null 丢弃。 */
+  function trainingBalance(records) {
+    const meta = {};
+    EXERCISES.forEach(e => { meta[e.id] = e; });
+    const rs = (Array.isArray(records) ? records : []).filter(r => r && meta[r.ex] && Number.isFinite(r.ts));
+    const byId = {};
+    rs.forEach(r => { byId[r.ex] = (byId[r.ex] || 0) + 1; });
+    const total = rs.length;
+    const items = Object.keys(byId).map(id => ({
+      id, name: meta[id].name, ico: meta[id].ico,
+      sessions: byId[id], pct: total ? Math.round(byId[id] / total * 100) : 0
+    })).sort((a, b) => b.sessions - a.sessions || a.name.localeCompare(b.name, 'zh'));
+    const distinct = items.length;
+    const topShare = total && items[0] ? Math.round(items[0].sessions / total * 100) : 0;
+    let verdict = 'none';
+    if (total >= 5 && distinct >= 1) {
+      if (distinct === 1) verdict = 'solo';
+      else if (topShare >= 60) verdict = 'biased';
+      else if (topShare <= 35) verdict = 'balanced';
+      else verdict = 'normal';
+    }
+    return { items, total, distinct, topShare, verdict, topName: items[0] ? items[0].name : '' };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend, topSessions,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend, topSessions, trainingBalance,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,
