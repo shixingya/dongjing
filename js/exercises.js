@@ -1232,7 +1232,9 @@
       { id: 'weekfull',  ico: '\ud83c\udf0d', name: '全勤周',     desc: '一周 7 天天天练到',        kind: 'weekFull', target: 7 },
       { id: 'marathon',  ico: '\ud83d\uddc6', name: '月度马拉松', desc: '单月训练点满 300',        kind: 'monthBest', target: 300 },
       { id: 'bronze',    ico: '\ud83e\udd49', name: '半千里程碑', desc: '累计 500 训练点',          kind: 'points',   target: 500 },
-      { id: 'shine',     ico: '\u2728', name: '亮眼一节',   desc: '单节表现分冲上 95',        kind: 'bestScore', target: 95 }
+      { id: 'shine',     ico: '\u2728', name: '亮眼一节',   desc: '单节表现分冲上 95',        kind: 'bestScore', target: 95 },
+      { id: 'iron',      ico: '\ud83d\udcaa', name: '百炼成钢', desc: '累计 100 节训练',           kind: 'count',    target: 100 },
+      { id: 'fortnight', ico: '\ud83c\udf19', name: '半月之约', desc: '连续打卡 14 天',            kind: 'streak',   target: 14 }
     ];
     const list = defs.map(b => {
       const c = cur[b.kind] || 0;

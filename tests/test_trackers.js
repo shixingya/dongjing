@@ -733,9 +733,9 @@ function mkHand(tipDist) {
   const nowNoon = t0 + 12 * 3600e3;
   const mk = (off, ex, mode, valid) => ({ ts: t0 - off * D, ex, mode, valid });
 
-  /* --- 空数据：全未解锁、total=17（v3.16 加 bronze/shine 后）--- */
+  /* --- 空数据：全未解锁、total=19（v3.18 加 iron/fortnight 后）--- */
   const zero = X.computeAchievements({ records: [], posture: [] }, { now: nowNoon });
-  if (zero.total !== 17) fail('徽章数期望 17 实际 ' + zero.total);
+  if (zero.total !== 19) fail('徽章数期望 19 实际 ' + zero.total);
   if (zero.earned !== 0) fail('空数据不应有解锁');
   if (zero.list[0].id !== 'first' || zero.list[0].earned) fail('first 应未解锁');
   if (zero.list.find(b => b.id === 'burner').cur !== 0) fail('空数据 burner 应 0');
@@ -744,6 +744,8 @@ function mkHand(tipDist) {
   if (zero.list.find(b => b.id === 'marathon').cur !== 0) fail('空数据 marathon 应 0');
   if (zero.list.find(b => b.id === 'bronze').cur !== 0) fail('空数据 bronze 应 0');
   if (zero.list.find(b => b.id === 'shine').cur !== 0) fail('空数据 shine 应 0');
+  if (zero.list.find(b => b.id === 'iron').cur !== 0) fail('空数据 iron 应 0');
+  if (zero.list.find(b => b.id === 'fortnight').cur !== 0) fail('空数据 fortnight 应 0');
   console.log('[ach] 空数据 OK, total =', zero.total);
 
   /* --- 混合数据：口径与 streak 自洽 --- */
@@ -791,6 +793,8 @@ function mkHand(tipDist) {
   if (res.list.find(b => b.id === 'marathon').earned) fail('混合数据月点 <300，marathon 应锁住');
   if (res.list.find(b => b.id === 'bronze').earned) fail('混合数据 points<500，bronze 应锁住');
   if (res.list.find(b => b.id === 'shine').earned) fail('混合数据无 score，shine 应锁住');
+  if (res.list.find(b => b.id === 'iron').earned) fail('混合数据 5 节<100，iron 应锁住');
+  if (res.list.find(b => b.id === 'fortnight').earned) fail('混合数据 streak<14，fortnight 应锁住');
 
   /* --- v3.12 新徽章：burner 累计千卡、weekchamp 单周冠军 --- */
   const calRecs = [];
@@ -852,6 +856,26 @@ function mkHand(tipDist) {
   const achSH3 = X.computeAchievements({ records: [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 10, score: 90 }], posture: [] }, { now: nowNoon });
   if (achSH3.list.find(b => b.id === 'shine').earned) fail('shine：90 分不应解锁');
   console.log('[ach] bronze/shine OK (500 点 / 96 分)');
+
+  /* --- v3.18 新徽章：iron 百炼成钢（累计 100 节）、fortnight 半月之约（连续 14 天）--- */
+  const irRecs = [];
+  for (let i = 0; i < 100; i++) irRecs.push({ ts: t0 - i * D + 36e5, ex: 'squat', mode: 'reps', valid: 1 }); // 100 节
+  const achIR = X.computeAchievements({ records: irRecs, posture: [] }, { now: nowNoon });
+  const ir = achIR.list.find(b => b.id === 'iron');
+  if (!ir || !ir.earned) fail('iron：累计 100 节应解锁 实际 cur ' + (ir && ir.cur));
+  if (ir.cur !== 100) fail('iron cur 期望 100 实际 ' + ir.cur);
+  const achIR2 = X.computeAchievements({ records: irRecs.slice(0, 99), posture: [] }, { now: nowNoon }); // 99 节
+  if (achIR2.list.find(b => b.id === 'iron').earned) fail('iron：99 节不应解锁');
+  /* fortnight：连续 14 天 */
+  const fnRecs = [];
+  for (let i = 0; i < 14; i++) fnRecs.push({ ts: t0 - i * D + 36e5, ex: 'squat', mode: 'reps', valid: 5 });
+  const achFN = X.computeAchievements({ records: fnRecs, posture: [] }, { now: nowNoon });
+  const fn = achFN.list.find(b => b.id === 'fortnight');
+  if (!fn || !fn.earned) fail('fortnight：连续 14 天应解锁 实际 cur ' + (fn && fn.cur));
+  if (fn.cur !== 14) fail('fortnight cur 期望 14 实际 ' + fn.cur);
+  const achFN2 = X.computeAchievements({ records: fnRecs.slice(0, 13), posture: [] }, { now: nowNoon }); // 13 天
+  if (achFN2.list.find(b => b.id === 'fortnight').earned) fail('fortnight：13 天不应解锁');
+  console.log('[ach] iron/fortnight OK (100 节 / 14 天)');
 
   console.log('[ach] 全部断言通过');
 }
