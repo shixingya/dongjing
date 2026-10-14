@@ -1272,4 +1272,34 @@ function mkHand(tipDist) {
   console.log('[gp] 全部断言通过');
 }
 
+/* ================= v3.8 评分分布 scoreDistribution ================= */
+{
+  const fail = m => { console.log('[sc] FAIL:', m); process.exit(1); };
+  if (X.SCORE_BUCKETS.length !== 4) fail('评分应分 4 档');
+
+  /* 空 / null 不崩 */
+  const e = X.scoreDistribution([]);
+  if (e.n !== 0 || e.avg !== 0 || e.dominantKey !== null || e.buckets.length !== 4) fail('空数据 n0/avg0/dominant null/4 档');
+  if (X.scoreDistribution(null).n !== 0) fail('null 应不崩');
+
+  /* 边界归属：50→low、60/74→pass、75/89→good、90/100→exc；sum538 avg77 */
+  const r = X.scoreDistribution([{ ts: 1, score: 50 }, { ts: 2, score: 60 }, { ts: 3, score: 74 }, { ts: 4, score: 75 }, { ts: 5, score: 89 }, { ts: 6, score: 90 }, { ts: 7, score: 100 }]);
+  const bk = {}; r.buckets.forEach(b => bk[b.key] = b);
+  if (r.n !== 7 || r.avg !== 77) fail('n7/avg77 实际 ' + r.n + '/' + r.avg);
+  if (bk.low.count !== 1 || bk.pass.count !== 2 || bk.good.count !== 2 || bk.exc.count !== 2) fail('分档 1/2/2/2 实际 ' + r.buckets.map(b => b.count).join('/'));
+  if (bk.pass.pct !== 29) fail('2/7 应 round 29% 实际 ' + bk.pass.pct);
+  if (r.dominantKey !== 'pass') fail('平手取靠前档位→pass 实际 ' + r.dominantKey);
+
+  /* 非法排除：无 score/score<=0/非有限 ts/null */
+  const dirty = X.scoreDistribution([{ ts: 1, score: 95 }, { ts: 2 }, { ts: 3, score: 0 }, { ts: NaN, score: 80 }, null, { score: 70 }]);
+  if (dirty.n !== 1 || dirty.dominantKey !== 'exc') fail('只应留 1 条 exc 实际 n' + dirty.n + '/' + dirty.dominantKey);
+
+  /* 单一档位全命中 */
+  const allExc = X.scoreDistribution([{ ts: 1, score: 92 }, { ts: 2, score: 100 }]);
+  const bx = {}; allExc.buckets.forEach(b => bx[b.key] = b);
+  if (bx.exc.count !== 2 || bx.exc.pct !== 100 || allExc.dominantKey !== 'exc' || allExc.avg !== 96) fail('全 exc：count2/pct100/dom exc/avg96');
+
+  console.log('[sc] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');

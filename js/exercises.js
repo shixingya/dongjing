@@ -1634,12 +1634,34 @@
       avgPoints: Math.round(sum / span), bestPoints };
   }
 
+  /* ================= 评分分布（v3.8）=================
+   * 表现走势看时间轴上的轨迹、最佳榜看峰值，这里看“所有练过的节整体质量落在哪”。
+   * 只取有限 ts + 有限 score>0 的记录，分入待改进/合格/良好/优秀四档，返回各档占比。 */
+  const SCORE_BUCKETS = [
+    { key: 'low',  name: '待改进', lo: 0,  hi: 60,       c: '#e0655b' },
+    { key: 'pass', name: '合格',   lo: 60, hi: 75,       c: '#e0a24e' },
+    { key: 'good', name: '良好',   lo: 75, hi: 90,       c: '#5bb8e0' },
+    { key: 'exc',  name: '优秀',   lo: 90, hi: Infinity, c: '#4fc38a' }
+  ];
+  function classifyScore(s) { for (let i = 0; i < SCORE_BUCKETS.length; i++) { if (s >= SCORE_BUCKETS[i].lo && s < SCORE_BUCKETS[i].hi) return SCORE_BUCKETS[i].key; } return 'exc'; }
+  function scoreDistribution(records) {
+    const rs = (Array.isArray(records) ? records : []).filter(r => r && Number.isFinite(r.ts) && Number.isFinite(r.score) && r.score > 0);
+    const n = rs.length;
+    const acc = {}; SCORE_BUCKETS.forEach(b => { acc[b.key] = 0; });
+    let sum = 0;
+    rs.forEach(r => { acc[classifyScore(r.score)]++; sum += r.score; });
+    const buckets = SCORE_BUCKETS.map(b => ({ key: b.key, name: b.name, c: b.c, count: acc[b.key], pct: n ? Math.round(acc[b.key] / n * 100) : 0 }));
+    let domKey = null, domName = null, dc = 0;
+    if (n) buckets.forEach(b => { if (b.count > dc) { dc = b.count; domKey = b.key; domName = b.name; } });   // 平手取靠前档位（保守）
+    return { n, avg: n ? Math.round(sum / n) : 0, buckets, dominantKey: domKey, dominantName: domName };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

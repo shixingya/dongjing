@@ -497,6 +497,15 @@ h3{font-size:18px}
 .gp-dot.part{background:#274234; border-color:#33574a}
 .gp-dot.hit{background:var(--hl); border-color:var(--hl)}
 @media (max-width:900px){ .gp-grid{grid-template-columns:1fr 1fr} }
+/* ---- v3.8 评分分布（堆叠占比条）---- */
+.sc-bar{display:flex; height:22px; border-radius:8px; overflow:hidden; margin-top:10px; background:#1a2434; gap:2px}
+.sc-bar i{display:block; min-width:4px}
+.sc-legend{display:flex; flex-wrap:wrap; gap:14px; margin-top:11px}
+.sc-item{display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted)}
+.sc-item i{width:11px; height:11px; border-radius:3px; display:inline-block}
+.sc-item b{color:var(--txt)}
+.sc-item.dom{color:var(--txt); font-weight:600}
+.sc-item.dom b{color:var(--hl)}
 
 @media (max-height:720px){
   .modal-box{max-height:88vh; max-height:88dvh; overflow:auto}

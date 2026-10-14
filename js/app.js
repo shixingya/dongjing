@@ -1566,7 +1566,7 @@
     { t: '成就', s: '.ach-card' }, { t: '时段', s: '.dp-card' }, { t: '最佳', s: '.pb-card' },
     { t: '星期', s: '.wd-card' }, { t: '部位', s: '.bc-card' }, { t: '纠错', s: '.it-card' },
     { t: '构成', s: '.ms-card' }, { t: '走势', s: '.st-card' }, { t: '节奏', s: '.tc-card' },
-    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
+    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
   ];
   function renderRepNav() {
     const nav = $('#rep-nav'); if (!nav) return;
@@ -1605,6 +1605,7 @@
     renderDuration();
     renderImprovement();
     renderGoal();
+    renderScoreDist();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -1899,6 +1900,19 @@
     const dots = $('#gp-dots');
     if (dots) dots.innerHTML = gp.window.map(d => '<i class="gp-dot' + (d.hit ? ' hit' : d.points > 0 ? ' part' : '') + '" title="' + fmtDate(d.ts) + ' · ' + d.points + ' 点' + (d.hit ? ' ✓ 达标' : '') + '"></i>').join('');
     if (sum) sum.textContent = '目标 ' + goal + ' 点/天 · 近 30 天达标率 ' + gp.hitRate + '%';
+  }
+
+  /* 评分分布：scoreDistribution 纯逻辑分档，这里画一条堆叠占比条 + 四档图例（区别于其他卡的行条样式） */
+  function renderScoreDist() {
+    const bar = $('#sc-bar'); if (!bar) return;
+    const sum = $('#sc-sum'), leg = $('#sc-legend');
+    const sc = X.scoreDistribution(DB.records);
+    if (!sc.n) { bar.innerHTML = ''; if (leg) leg.innerHTML = '<div class="empty-tip">还没有带评分的训练记录，练几节这里会画你的质量分布</div>'; if (sum) sum.textContent = ''; return; }
+    bar.innerHTML = sc.buckets.filter(b => b.count).map(b =>
+      '<i style="flex:' + b.count + ';background:' + b.c + '" title="' + b.name + ' · ' + b.count + ' 节 · 占 ' + b.pct + '%"></i>').join('');
+    if (leg) leg.innerHTML = sc.buckets.map(b =>
+      '<span class="sc-item' + (b.key === sc.dominantKey ? ' dom' : '') + '"><i style="background:' + b.c + '"></i>' + b.name + ' <b>' + b.count + '</b></span>').join('');
+    if (sum) sum.textContent = '共 ' + sc.n + ' 节有评分 · 均分 ' + sc.avg + ' · 多在「' + sc.dominantName + '」';
   }
 
   /* ---------------- 我的 / Pro ---------------- */
