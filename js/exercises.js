@@ -1205,11 +1205,15 @@
     /* v3.12 新徽章口径：单周冠军直接拿 weekRecords 各周点数峰值（含进行中的本周，当周冲到就算） */
     const wr = weekRecords(records, { today: now });
     const weekBest = wr.weeks.reduce((mx, w) => Math.max(mx, w.points), 0);
+    /* v3.14 新徽章口径：全勤周 = weekRecords 各周活跃天峰值（days 已按 recPoints>0 去重）、月度马拉松 = monthlyTrend 各月点数峰值 */
+    const weekFull = wr.weeks.reduce((mx, w) => Math.max(mx, w.days), 0);
+    const mt = monthlyTrend(records, { today: now, months: 12 });
+    const monthBest = mt.months.reduce((mx, m) => Math.max(mx, m.points), 0);
     const cur = {
       count: records.length, ex: exSeen.size, streak: st.cur,
       points: Math.round(points), circuit: hasCircuit ? 1 : 0, game: hasGame ? 1 : 0, posture: posture.length,
       hitStreak: gp ? gp.longestHitStreak : 0, mins: Math.round(secsSum / 60),
-      cals: Math.round(calSum), weekBest
+      cals: Math.round(calSum), weekBest, weekFull, monthBest
     };
     const defs = [
       { id: 'first',     ico: '\ud83c\udf31', name: '开始出发',   desc: '完成第一次训练',        kind: 'count',   target: 1 },
@@ -1224,7 +1228,9 @@
       { id: 'goalie',    ico: '\ud83c\udfaf', name: '目标达人',   desc: '连续 7 天达成每日目标',    kind: 'hitStreak', target: 7 },
       { id: 'endurance', ico: '\u23f1\ufe0f', name: '时长收藏家', desc: '累计运动满 300 分钟',      kind: 'mins',    target: 300 },
       { id: 'burner',    ico: '\ud83d\udca5', name: '燃脂达人',   desc: '累计消耗满 1000 千卡',      kind: 'cals',    target: 1000 },
-      { id: 'weekchamp', ico: '\ud83c\udfc6', name: '单周冠军',   desc: '单周训练点满 100',        kind: 'weekBest', target: 100 }
+      { id: 'weekchamp', ico: '\ud83c\udfc6', name: '单周冠军',   desc: '单周训练点满 100',        kind: 'weekBest', target: 100 },
+      { id: 'weekfull',  ico: '\ud83c\udf0d', name: '全勤周',     desc: '一周 7 天天天练到',        kind: 'weekFull', target: 7 },
+      { id: 'marathon',  ico: '\ud83d\uddc6', name: '月度马拉松', desc: '单月训练点满 300',        kind: 'monthBest', target: 300 }
     ];
     const list = defs.map(b => {
       const c = cur[b.kind] || 0;

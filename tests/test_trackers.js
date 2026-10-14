@@ -733,13 +733,15 @@ function mkHand(tipDist) {
   const nowNoon = t0 + 12 * 3600e3;
   const mk = (off, ex, mode, valid) => ({ ts: t0 - off * D, ex, mode, valid });
 
-  /* --- 空数据：全未解锁、total=13（v3.12 加 burner/weekchamp 后）--- */
+  /* --- 空数据：全未解锁、total=15（v3.14 加 weekfull/marathon 后）--- */
   const zero = X.computeAchievements({ records: [], posture: [] }, { now: nowNoon });
-  if (zero.total !== 13) fail('徽章数期望 13 实际 ' + zero.total);
+  if (zero.total !== 15) fail('徽章数期望 15 实际 ' + zero.total);
   if (zero.earned !== 0) fail('空数据不应有解锁');
   if (zero.list[0].id !== 'first' || zero.list[0].earned) fail('first 应未解锁');
   if (zero.list.find(b => b.id === 'burner').cur !== 0) fail('空数据 burner 应 0');
   if (zero.list.find(b => b.id === 'weekchamp').cur !== 0) fail('空数据 weekchamp 应 0');
+  if (zero.list.find(b => b.id === 'weekfull').cur !== 0) fail('空数据 weekfull 应 0');
+  if (zero.list.find(b => b.id === 'marathon').cur !== 0) fail('空数据 marathon 应 0');
   console.log('[ach] 空数据 OK, total =', zero.total);
 
   /* --- 混合数据：口径与 streak 自洽 --- */
@@ -783,6 +785,8 @@ function mkHand(tipDist) {
   /* 混合数据无千卡、单周点不足 100 → burner/weekchamp 锁住、不扰动 earned */
   if (res.list.find(b => b.id === 'burner').cur !== 0) fail('混合数据无 cal，burner 应 0');
   if (res.list.find(b => b.id === 'weekchamp').earned) fail('混合数据单周点 <100，weekchamp 应锁住');
+  if (res.list.find(b => b.id === 'weekfull').earned) fail('混合数据无满 7 天周，weekfull 应锁住');
+  if (res.list.find(b => b.id === 'marathon').earned) fail('混合数据月点 <300，marathon 应锁住');
 
   /* --- v3.12 新徽章：burner 累计千卡、weekchamp 单周冠军 --- */
   const calRecs = [];
@@ -805,6 +809,25 @@ function mkHand(tipDist) {
   const achW2 = X.computeAchievements({ records: wcSplit, posture: [] }, { now: nowNoon });
   if (achW2.list.find(b => b.id === 'weekchamp').earned) fail('weekchamp：两周各 60 点不应解锁');
   console.log('[ach] burner/weekchamp OK (cal 1000 / weekBest 120)');
+
+  /* --- v3.14 新徽章：weekfull 全勤周、marathon 月度马拉松 --- */
+  const wfRecs = [];
+  for (let i = 0; i < 7; i++) wfRecs.push({ ts: t0 - 2 * D + i * D + 36e5, ex: 'squat', mode: 'reps', valid: 5 }); // Oct12–18 连续 7 天
+  const achWF = X.computeAchievements({ records: wfRecs, posture: [] }, { now: nowNoon });
+  const wfb = achWF.list.find(b => b.id === 'weekfull');
+  if (!wfb || !wfb.earned) fail('weekfull：一周 7 天天天练到应解锁 实际 cur ' + (wfb && wfb.cur));
+  if (wfb.cur !== 7) fail('weekfull cur 期望 7 实际 ' + wfb.cur);
+  /* 只 6 天不解锁 */
+  const achWF6 = X.computeAchievements({ records: wfRecs.slice(0, 6), posture: [] }, { now: nowNoon });
+  if (achWF6.list.find(b => b.id === 'weekfull').earned) fail('weekfull：6 天不应解锁');
+  /* marathon：单月训练点满 300 */
+  const achMA = X.computeAchievements({ records: [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 350 }], posture: [] }, { now: nowNoon });
+  const ma = achMA.list.find(b => b.id === 'marathon');
+  if (!ma || !ma.earned) fail('marathon：单月 350 点应解锁 实际 cur ' + (ma && ma.cur));
+  if (ma.cur !== 300) fail('marathon cur 封顶 300 实际 ' + ma.cur);
+  const achMA2 = X.computeAchievements({ records: [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 250 }], posture: [] }, { now: nowNoon });
+  if (achMA2.list.find(b => b.id === 'marathon').earned) fail('marathon：250 点不应解锁');
+  console.log('[ach] weekfull/marathon OK (7 天 / 月 350 点)');
 
   console.log('[ach] 全部断言通过');
 }
