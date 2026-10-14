@@ -1566,7 +1566,7 @@
     { t: '成就', s: '.ach-card' }, { t: '时段', s: '.dp-card' }, { t: '最佳', s: '.pb-card' },
     { t: '星期', s: '.wd-card' }, { t: '部位', s: '.bc-card' }, { t: '纠错', s: '.it-card' },
     { t: '构成', s: '.ms-card' }, { t: '走势', s: '.st-card' }, { t: '节奏', s: '.tc-card' },
-    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '月度', s: '.mt-card' }, { t: '高光', s: '.ts-card' }, { t: '均衡', s: '.tb-card' }, { t: '稳定', s: '.ws-card' }, { t: '效率', s: '.ef-card' }, { t: '热量', s: '.cp-card' }, { t: '强度', s: '.ip-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
+    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '月度', s: '.mt-card' }, { t: '高光', s: '.ts-card' }, { t: '均衡', s: '.tb-card' }, { t: '稳定', s: '.ws-card' }, { t: '效率', s: '.ef-card' }, { t: '热量', s: '.cp-card' }, { t: '强度', s: '.ip-card' }, { t: '达成', s: '.ta-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
   ];
   function renderRepNav() {
     const nav = $('#rep-nav'); if (!nav) return;
@@ -1614,6 +1614,7 @@
     renderEfficiency();
     renderCalorie();
     renderIntensity();
+    renderAdherence();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -2059,6 +2060,24 @@
     const VD = { peak: '火力全开·强度很高', high: '强度不小·燃脂高效', moderate: '强度适中·很健康', light: '强度温与·可适度加码', none: '' };
     const CLS = { peak: 'good', high: 'good', moderate: '', light: 'warn', none: '' };
     if (sum) sum.innerHTML = '综合强度 <span class="ip-verdict ' + (CLS[ip.verdict] || '') + '">' + ip.overall + ' 千卡/分</span>·' + (VD[ip.verdict] || '') + (ip.total > 1 && ip.best ? '·最猛「' + ip.best.name + '」' : '');
+  }
+
+  /* v3.25 计划达成度：targetAdherence 纯逻辑算 Σvalid/Σtarget，这里按动作画行条 */
+  function renderAdherence() {
+    const box = $('#ta-rows'); if (!box) return;
+    const sum = $('#ta-sum');
+    const ta = X.targetAdherence(DB.records);
+    if (!ta.sessions) { box.innerHTML = '<div class="empty-tip">还没有能对计划的记录，练计次/计时动作时就会自动算你有没有把计划的量练满</div>'; if (sum) sum.textContent = ''; return; }
+    const max = Math.max(1, ...ta.items.map(it => it.rate));
+    box.innerHTML = ta.items.slice(0, 6).map(it =>
+      '<div class="ta-row" title="' + it.name + ' · 达成 ' + it.rate + '%（' + it.sessions + ' 节，计划 ' + it.target + ' · 完成 ' + it.valid + '）">' +
+      '<span class="ta-ico">' + it.ico + '</span>' +
+      '<span class="ta-name">' + it.name + '</span>' +
+      '<span class="ta-track"><i style="width:' + Math.round(it.rate / max * 100) + '%"></i></span>' +
+      '<b class="ta-num">' + it.rate + '%</b></div>').join('');
+    const VD = { great: '基本都练满了·很自律', good: '多数能练到位', fair: '常差一口气·可适量加码', low: '常常没练满·建议调低目标或加时间', none: '' };
+    const CLS = { great: 'good', good: 'good', fair: 'warn', low: 'warn', none: '' };
+    if (sum) sum.innerHTML = '计划完成率 <span class="ta-verdict ' + (CLS[ta.verdict] || '') + '">' + ta.overallRate + '%</span>·' + (VD[ta.verdict] || '') + (ta.full ? '·' + ta.full + ' 个动作练满' : '');
   }
 
   /* ---------------- 我的 / Pro ---------------- */

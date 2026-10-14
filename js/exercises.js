@@ -1971,12 +1971,50 @@
       best: items[0] || null, easiest: items.length ? items[items.length - 1] : null };
   }
 
+  /* ================= 计划达成度（v3.25）=================
+   * 专看“练够量没”：把每次计划目标（reps 目标次数 / time 目标秒）与实际完成量
+   * （valid）汇总成完成率 Σvalid/Σtarget。与 v3.19 efficiencyStats 正交：那个是
+   * valid/attempts（动作做得标不标准、通过率），这个是 valid/target（有没有把计划的
+   * 量练满），一个管质量、一个管剂量。只认真实动作库的 reps/time 记录（game 的 target
+   * 是 60 秒局长、valid 是得分，量纲不同；circuit target 恒 0，均无法算达成率，故排除）。
+   * 逐动作率与综合率封顶 100%（超练也按满算，与有效率同一口径）。非有限 / 未知 id /
+   * null / target<=0 丢弃不崩。 */
+  function targetAdherence(records) {
+    const meta = {};
+    EXERCISES.forEach(e => { meta[e.id] = e; });
+    const rs = (Array.isArray(records) ? records : [])
+      .filter(r => r && meta[r.ex] && (r.mode === 'reps' || r.mode === 'time') && Number.isFinite(r.target) && r.target > 0 && Number.isFinite(r.valid) && r.valid >= 0);
+    const byId = {};
+    let vSum = 0, tSum = 0;
+    rs.forEach(r => {
+      vSum += r.valid; tSum += r.target;
+      const b = byId[r.ex] || (byId[r.ex] = { id: r.ex, name: meta[r.ex].name, ico: meta[r.ex].ico, valid: 0, target: 0, sessions: 0 });
+      b.valid += r.valid; b.target += r.target; b.sessions++;
+    });
+    const items = Object.keys(byId).map(id => {
+      const b = byId[id];
+      return { id, name: b.name, ico: b.ico, sessions: b.sessions, valid: b.valid, target: b.target,
+        rate: Math.min(100, Math.round(b.valid / b.target * 100)) };
+    }).sort((a, b) => b.rate - a.rate || b.sessions - a.sessions || a.name.localeCompare(b.name, 'zh'));
+    const overallRate = tSum ? Math.min(100, Math.round(vSum / tSum * 100)) : 0;
+    let verdict = 'none';
+    if (tSum >= 10) {
+      if (overallRate >= 90) verdict = 'great';
+      else if (overallRate >= 70) verdict = 'good';
+      else if (overallRate >= 45) verdict = 'fair';
+      else verdict = 'low';
+    }
+    const full = items.filter(it => it.rate >= 100).length;
+    return { items, total: items.length, sessions: rs.length, totalValid: vSum, totalTarget: tSum, overallRate, verdict, full,
+      best: items[0] || null, worst: items.length ? items[items.length - 1] : null };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend, topSessions, trainingBalance, weekStability, efficiencyStats, calorieProfile, intensityProfile,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend, topSessions, trainingBalance, weekStability, efficiencyStats, calorieProfile, intensityProfile, targetAdherence,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

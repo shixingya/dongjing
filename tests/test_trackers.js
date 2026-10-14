@@ -1896,4 +1896,58 @@ function mkHand(tipDist) {
   console.log('[ip] 全部断言通过');
 }
 
+/* ================= v3.25 计划达成度 targetAdherence ================= */
+{
+  const D = 864e5;
+  const fail = m => { console.log('[ta] FAIL:', m); process.exit(1); };
+  if (typeof X.targetAdherence !== 'function') fail('targetAdherence 未导出');
+  const t0 = new Date(2026, 9, 15, 12).getTime();
+
+  /* 空 / null 不崩 */
+  const e = X.targetAdherence([]);
+  if (e.total !== 0 || e.sessions !== 0 || e.overallRate !== 0 || e.verdict !== 'none' || e.full !== 0 || e.best !== null || e.worst !== null || e.items.length !== 0) fail('空数据应 total0/sessions0/overallRate0/none/full0/best null/worst null/items []');
+  if (X.targetAdherence(null).sessions !== 0) fail('null 应不崩');
+
+  /* 主用例：squat(9/12 + 15/12 → 聚合 24/24=100 封顶) + jack(21/30=70) + plank(12/30=40) */
+  const r = X.targetAdherence([
+    { ts: t0, ex: 'squat', mode: 'reps', target: 12, valid: 9 },
+    { ts: t0 - D, ex: 'squat', mode: 'reps', target: 12, valid: 15 },   // 超练→封顶 100
+    { ts: t0 - 2 * D, ex: 'jack', mode: 'reps', target: 30, valid: 21 },
+    { ts: t0 - 3 * D, ex: 'plank', mode: 'time', target: 30, valid: 12 },
+    { ts: t0, ex: 'game-collect', mode: 'game', target: 60, valid: 450 },  // game→排除
+    { ts: t0, ex: 'circuit', mode: 'reps', target: 0, valid: 20 },         // target<=0→排除
+    { ts: t0, ex: 'mystery', mode: 'reps', target: 10, valid: 5 },         // 非真动作库→排除
+    { ts: t0, ex: 'squat', mode: 'reps', target: NaN, valid: 5 },          // target 非有限→排除
+    { ts: t0, ex: 'squat', mode: 'reps', target: 10, valid: -3 },          // valid<0→排除
+    null
+  ]);
+  if (r.total !== 3 || r.sessions !== 4) fail('应 3 个动作/4 节（排除干扰）实际 ' + r.total + '/' + r.sessions);
+  if (r.totalValid !== 57 || r.totalTarget !== 84) fail('总 valid/target 期望 57/84 实际 ' + r.totalValid + '/' + r.totalTarget);
+  if (r.overallRate !== 68 || r.verdict !== 'fair') fail('综合达成率 57/84=67.86→68/fair 实际 ' + r.overallRate + '/' + r.verdict);
+  if (r.items[0].id !== 'squat' || r.items[0].rate !== 100 || r.items[0].sessions !== 2) fail('首行应 squat rate100(封顶)/2节 实际 ' + JSON.stringify(r.items[0]));
+  if (r.items[1].id !== 'jack' || r.items[1].rate !== 70) fail('次行应 jack rate70 实际 ' + JSON.stringify(r.items[1]));
+  if (r.items[2].id !== 'plank' || r.items[2].rate !== 40) fail('末行应 plank rate40 实际 ' + JSON.stringify(r.items[2]));
+  if (r.full !== 1) fail('应 1 个动作练满（squat）实际 ' + r.full);
+  if (r.best.id !== 'squat' || r.worst.id !== 'plank') fail('best squat / worst plank');
+
+  /* 封顶：超练 target12 valid30 → rate100（而非 250） */
+  const cap = X.targetAdherence([{ ts: t0, ex: 'squat', mode: 'reps', target: 12, valid: 30 }]);
+  if (cap.items[0].rate !== 100 || cap.overallRate !== 100) fail('超练应封顶 100 实际 ' + cap.items[0].rate + '/' + cap.overallRate);
+
+  /* verdict 四档：great(>=90)/good(>=70)/low(<45)，且 tSum<10 则 none */
+  if (X.targetAdherence([{ ts: t0, ex: 'squat', mode: 'reps', target: 10, valid: 9 }]).verdict !== 'great') fail('90% 应 great');
+  const gd = X.targetAdherence([{ ts: t0, ex: 'jack', mode: 'reps', target: 100, valid: 70 }]);
+  if (gd.overallRate !== 70 || gd.verdict !== 'good') fail('70% 应 good 实际 ' + gd.overallRate + '/' + gd.verdict);
+  const lo = X.targetAdherence([{ ts: t0, ex: 'jack', mode: 'reps', target: 100, valid: 40 }]);
+  if (lo.overallRate !== 40 || lo.verdict !== 'low') fail('40% 应 low 实际 ' + lo.overallRate + '/' + lo.verdict);
+  const no = X.targetAdherence([{ ts: t0, ex: 'squat', mode: 'reps', target: 8, valid: 3 }]);
+  if (no.overallRate !== 38 || no.verdict !== 'none') fail('tSum<10 应 none（即便率 38）实际 ' + no.overallRate + '/' + no.verdict);
+
+  /* time 模式计入：plank target30 valid15 → 50% */
+  const tm = X.targetAdherence([{ ts: t0, ex: 'plank', mode: 'time', target: 30, valid: 15 }]);
+  if (tm.sessions !== 1 || tm.items[0].rate !== 50) fail('time 模式应计入 rate50 实际 ' + tm.sessions + '/' + tm.items[0].rate);
+
+  console.log('[ta] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');
