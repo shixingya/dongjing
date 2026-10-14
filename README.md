@@ -5,9 +5,9 @@
 纯网页 AI 体感私教：**13 个动作 · 33 关键点 · 26 条纠错规则 · 3 个体感关卡 · 7 天自动课表 · 8 项体态评估**，基于 MediaPipe Pose 在浏览器**本地实时推理**，画面不上传云端；
 像 Posiqo 一样**只统计标准有效次数**，动作错了实时语音纠正；像慧动少年一样提供**两步（正面+侧面）体态快评**；像 BodyArcade 一样**把动作做成关卡**；还能**记住你的老毛病**、**每次自己复盘**。
 
-![license](https://img.shields.io/badge/license-MIT-green) ![v1](https://img.shields.io/badge/version-v3.16-blue)
+![license](https://img.shields.io/badge/license-MIT-green) ![v1](https://img.shields.io/badge/version-v3.17-blue)
 
-## 功能（v3.16）
+## 功能（v3.17）
 
 - 🎥 摄像头实时姿态识别（33 关键点骨骼叠加，镜像预览，全程本地运算）
 - 🏋️ 十三个动作的有效次数引擎：力量系 **深蹲 / 开合跳 / 高抬腿 / 俯卧撑 / 弓步蹲 / 平板支撑 / 🧱靠墙静蹲**，坐姿上肢系（腿不入镜也能练）：**摇头放松 / 挥臂激活 / 🤸耸肩放松 / 🤲侧平举 / ✊手掌抓握（手指级，需 HandLandmarker）**，拉伸系：**🌗体侧伸展**
@@ -56,6 +56,7 @@
 - 🏅 成就墙再扩容两枚（v3.14）：徽章从 13 枚加到 **15 枚**——🌍「全勤周」（一周 7 天天天练到，直接取 weekRecords 各周活跃天峰值）与 🗓️「月度马拉松」（单月训练点满 300，取 monthlyTrend 各月点数峰值）；依旧零 UI 改动，两枚新口径直接复用已有周纪录/月度趋势纯函数（exercises.js 纯函数 `computeAchievements` 扩充，可离线单测）
 - ⚖️ 训练均衡度（v3.15）：报告页新增“训练均衡度”卡，把节数按真动作分布开、算最勤一个动作的占比，据此起“只恰一个 / 偏科≥60% / 适中 35–60% / 均衡≤35%”四种定性（样本不足 5 节不下结论）；与 v2.7 部位覆盖度互补（那个看哪块部位没练一缺项，这个看已练的动作之间集不集中一偏科），只认真动作库 id（game-/circuit 不计入、与最佳榜/高光榜同一口径）（exercises.js 纯函数 `trainingBalance`，可离线单测）
 - 🏅 成就墙再扩容两枚（v3.16）：徽章从 15 枚加到 **17 枚**——🥉「半千里程碑」（累计 500 训练点，与千点俱乐部同一条 points 里程线的中间档）与 ✨「亮眼一节」（单节真动作表现分冲上 95，只取真动作库 id 的最高 score、game 高分不算）；依旧零 UI 改动（exercises.js 纯函数 `computeAchievements` 扩充，可离线单测）
+- 📊 周训练稳定度（v3.17）：报告页新增“周训练稳定度”卡，把最近 8 个自然周（含空周）逐周用 `recPoints` 汇总画柱，用变异系数 CV=标准差/均值 给“周周稳 / 有起伏 / 大起大落”的定性；与热力图（逐日原始点）/周纪录（单周量峰值）/训练节奏（间隔天数）/星期节奏（周内分布）均正交——这里看的是周与周之间训练量的波动。稳定度只统计完整周（进行中的本周 partial 不进均值/CV，但保留在柱里供 UI），非有限 ts/null 丢弃（exercises.js 纯函数 `weekStability`，可离线单测）
 - 💎 商业占位：免费 = 7 个基础动作（含坐姿摇头/挥臂/耸肩与体侧伸展）+ 每月 6 次；Pro ¥29/月 · ¥168/年解锁 6 个动作（手指级抓握 + 俯卧撑/弓步蹲/平板支撑/侧平举/靠墙静蹲）。三个体感关卡与两步体态评估（含趋势）全部免费，不扣训练额度
 
 ## 运行
@@ -83,7 +84,7 @@ python -m http.server 8790
 dongjing/
 ├── index.html          # 单页应用（首页/训练/结果/体态/报告/我的）
 ├── css/style.css       # 深色健身 HUD 主题
-├── js/exercises.js     # 动作引擎：13 个动作的有效次数状态机 + 纠错规则 + 体态评估（正面 analyzePosture / 侧面 analyzePostureSide / 合并 mergePosture）+ 一句话编排（planFromText）+ 体感关卡逻辑（makeGame）+ 周课表（makeWeekPlan）+ 我的课程模板 + 数据备份（exportPayload/parseImport）+ 训练点与热力图分桶（recPoints/buildHeatmap）+ 成就徽章（computeAchievements，17 枚）+ 周环比（weekCompare）+ 时段分布（daypartStats）+ 动作最佳榜（personalBests）+ 星期训练节奏（weekdayRhythm）+ 部位覆盖度（bodyCoverage）+ 生涯总览（lifetimeStats）+ 纠错改善趋势（issueTrend）+ 训练构成（modeSplit）+ 表现走势（scoreTrend）+ 训练节奏（trainingCadence）+ 时长画像（sessionDuration）+ 动作提升对比（improvementStats）+ 每日目标达成画像（goalProfile）+ 评分分布（scoreDistribution）+ 单周个人纪录（weekRecords）+ 月度趋势（monthlyTrend）+ 高光时刻榜（topSessions）+ 训练均衡度（trainingBalance）
+├── js/exercises.js     # 动作引擎：13 个动作的有效次数状态机 + 纠错规则 + 体态评估（正面 analyzePosture / 侧面 analyzePostureSide / 合并 mergePosture）+ 一句话编排（planFromText）+ 体感关卡逻辑（makeGame）+ 周课表（makeWeekPlan）+ 我的课程模板 + 数据备份（exportPayload/parseImport）+ 训练点与热力图分桶（recPoints/buildHeatmap）+ 成就徽章（computeAchievements，17 枚）+ 周环比（weekCompare）+ 时段分布（daypartStats）+ 动作最佳榜（personalBests）+ 星期训练节奏（weekdayRhythm）+ 部位覆盖度（bodyCoverage）+ 生涯总览（lifetimeStats）+ 纠错改善趋势（issueTrend）+ 训练构成（modeSplit）+ 表现走势（scoreTrend）+ 训练节奏（trainingCadence）+ 时长画像（sessionDuration）+ 动作提升对比（improvementStats）+ 每日目标达成画像（goalProfile）+ 评分分布（scoreDistribution）+ 单周个人纪录（weekRecords）+ 月度趋势（monthlyTrend）+ 高光时刻榜（topSessions）+ 训练均衡度（trainingBalance）+ 周训练稳定度（weekStability）
 ├── js/app.js           # 主应用：摄像头循环、HUD、语音、组/循环/关卡流程、课表卡、回放、海报、报表、额度、教练记忆与复盘
 ├── tests/test_trackers.js  # 引擎回归单测（合成坐标帧 / 合成关卡输入）：node tests/test_trackers.js
 └── docs/PRD.md         # 初版产品需求文档（市场对标 / 功能分级 / 变现）

@@ -1812,12 +1812,66 @@
     return { items, total, distinct, topShare, verdict, topName: items[0] ? items[0].name : '' };
   }
 
+  /* ================= 周训练稳定度（v3.17）=================
+   * 衡量习惯稳不稳：把最近 N 个自然周（含空周）逐周用 recPoints 汇总，
+   * 用变异系数 CV=标准差/均值 给“很稳 / 有起伏 / 大起大落”的定性。与已有报表正交：
+   * 热力图看逐日原始点、周纪录看单周量峰值、训练节奏看间隔天数、星期节奏看周内分布，
+   * 这里看的是周与周之间训练量的波动。稳定度只统计完整周（进行中的本周 partial 不进
+   * 均值/CV，避免本周未满造成假波动），但保留在 weeks 里供 UI 画柱。非有限 ts/null 丢弃。 */
+  function weekStability(records, opts) {
+    const o = opts || {};
+    const D = 864e5;
+    const ds = t => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); };
+    const mondayStart = t => { const s = ds(t); const wd = (new Date(s).getDay() + 6) % 7; return s - wd * D; };
+    const now = Number(o.today) || Date.now();
+    const n = Math.max(2, Math.min(12, (o.weeks === undefined ? 8 : (o.weeks | 0))));
+    const curStart = mondayStart(now);
+    const rs = (Array.isArray(records) ? records : []).filter(r => r && Number.isFinite(r.ts));
+    const buckets = [];
+    const idx = {};
+    for (let i = n - 1; i >= 0; i--) {
+      const start = curStart - i * 7 * D;
+      idx[start] = buckets.length;
+      buckets.push({ start, points: 0, days: new Set() });
+    }
+    rs.forEach(r => {
+      const i = idx[mondayStart(r.ts)];
+      if (i === undefined) return;
+      const p = recPoints(r);
+      buckets[i].points += p;
+      if (p > 0) buckets[i].days.add(ds(r.ts));
+    });
+    const wlabel = t => { const a = new Date(t); return (a.getMonth() + 1) + '/' + a.getDate(); };
+    const weeks = buckets.map((b, i) => ({
+      start: b.start, label: wlabel(b.start),
+      points: Math.round(b.points), days: b.days.size, partial: i === buckets.length - 1
+    }));
+    const full = weeks.slice(0, weeks.length - 1);   // 排除进行中的本周
+    const pts = full.map(w => w.points);
+    const count = pts.length;
+    const mean = count ? pts.reduce((s, p) => s + p, 0) / count : 0;
+    let cv = 0;
+    if (count >= 2 && mean > 0) {
+      const variance = pts.reduce((s, p) => s + (p - mean) * (p - mean), 0) / count;
+      cv = Math.round(Math.sqrt(variance) / mean * 100);
+    }
+    const avgDays = count ? Math.round(full.reduce((s, w) => s + w.days, 0) / count * 10) / 10 : 0;
+    const activeWeeks = pts.filter(p => p > 0).length;
+    let verdict = 'none';
+    if (count >= 3 && mean > 0) {
+      if (cv <= 30) verdict = 'steady';
+      else if (cv <= 60) verdict = 'moderate';
+      else verdict = 'variable';
+    }
+    return { weeks, count, meanPoints: Math.round(mean), cv, avgDays, activeWeeks, verdict };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend, topSessions, trainingBalance,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend, topSessions, trainingBalance, weekStability,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

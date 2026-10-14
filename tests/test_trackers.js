@@ -1584,4 +1584,78 @@ function mkHand(tipDist) {
   console.log('[tb] 全部断言通过');
 }
 
+/* ================= v3.17 周训练稳定度 weekStability ================= */
+{
+  const D = 864e5;
+  const fail = m => { console.log('[ws] FAIL:', m); process.exit(1); };
+  if (typeof X.weekStability !== 'function') fail('weekStability 未导出');
+  const ds = t => { const x = new Date(t); x.setHours(0, 0, 0, 0); return x.getTime(); };
+  const mondayStart = t => { const s = ds(t); const wd = (new Date(s).getDay() + 6) % 7; return s - wd * D; };
+  const t0 = new Date(2026, 9, 14, 12).getTime();
+  const curStart = mondayStart(t0);
+  /* vals[0..6] → 7 个完整周（由旧到新），curVal → 进行中的本周 */
+  const build = (vals, curVal) => {
+    const arr = [];
+    for (let j = 0; j < 7; j++) {
+      const k = 7 - j;                      // weeks[j] start = curStart - k*7D
+      if (vals[j] > 0) arr.push({ ts: curStart - k * 7 * D + 3600e3, ex: 'squat', mode: 'reps', valid: vals[j] });
+    }
+    if (curVal > 0) arr.push({ ts: curStart + 3600e3, ex: 'squat', mode: 'reps', valid: curVal });
+    return arr;
+  };
+
+  /* 空/null */
+  const e = X.weekStability([], { today: t0 });
+  if (e.weeks.length !== 8 || e.count !== 7) fail('默认 8 桶/7 完整周 实际 ' + e.weeks.length + '/' + e.count);
+  if (e.meanPoints !== 0 || e.cv !== 0 || e.verdict !== 'none' || e.activeWeeks !== 0) fail('空数据应 mean0/cv0/none/active0');
+  if (X.weekStability(null, { today: t0 }).weeks.length !== 8) fail('null 应不崩且 8 桶');
+
+  /* 周数限幅：1→2、100→12 */
+  if (X.weekStability([], { today: t0, weeks: 1 }).weeks.length !== 2) fail('weeks=1 应限幅 2');
+  if (X.weekStability([], { today: t0, weeks: 100 }).weeks.length !== 12) fail('weeks=100 应限幅 12');
+
+  /* steady：7 周全 50 → mean50/cv0/steady，本周有量也不拉低 */
+  const steady = X.weekStability(build([50,50,50,50,50,50,50], 30), { today: t0 });
+  if (steady.meanPoints !== 50 || steady.cv !== 0 || steady.verdict !== 'steady') fail('全 50 应 steady/mean50/cv0 实际 ' + steady.verdict + '/' + steady.meanPoints + '/' + steady.cv);
+  if (steady.activeWeeks !== 7 || steady.avgDays !== 1) fail('steady activeWeeks7/avgDays1 实际 ' + steady.activeWeeks + '/' + steady.avgDays);
+
+  /* partial 排除：本周量不进 mean/cv，但保留在末桶供 UI */
+  const part = X.weekStability(build([10,10,10,10,10,10,10], 1000), { today: t0 });
+  if (part.meanPoints !== 10 || part.verdict !== 'steady') fail('本周 1000 不应影响 mean(=10)/steady 实际 ' + part.meanPoints + '/' + part.verdict);
+  const lastW = part.weeks[part.weeks.length - 1];
+  if (lastW.partial !== true || lastW.points !== 1000) fail('末桶应 partial 且 points=1000 实际 ' + lastW.partial + '/' + lastW.points);
+  if (part.count !== 7) fail('count 应只数完整周 7');
+
+  /* moderate：cv 在 30~60 → [20,80,20,80,20,80,50] cv≈56 */
+  const mo = X.weekStability(build([20,80,20,80,20,80,50], 0), { today: t0 });
+  if (mo.meanPoints !== 50 || mo.cv !== 56 || mo.verdict !== 'moderate') fail('期望 mean50/cv56/moderate 实际 ' + mo.meanPoints + '/' + mo.cv + '/' + mo.verdict);
+
+  /* variable：cv>60 → [10,90,10,90,10,90,10] cv≈89 */
+  const va = X.weekStability(build([10,90,10,90,10,90,10], 0), { today: t0 });
+  if (va.meanPoints !== 44 || va.cv !== 89 || va.verdict !== 'variable') fail('期望 mean44/cv89/variable 实际 ' + va.meanPoints + '/' + va.cv + '/' + va.verdict);
+
+  /* 样本不足：均值 0（全空完整周）→ verdict none，即便本周有量 */
+  const noneV = X.weekStability(build([0,0,0,0,0,0,0], 60), { today: t0 });
+  if (noneV.verdict !== 'none' || noneV.activeWeeks !== 0) fail('完整周全空应 none/active0 实际 ' + noneV.verdict + '/' + noneV.activeWeeks);
+
+  /* 口径：game 记录按 recPoints 折算（valid30→10 点）、同周同日去重 days=1 */
+  const dedup = X.weekStability([
+    { ts: curStart - 49 * D + 3600e3, ex: 'game-collect', mode: 'game', valid: 30 },
+    { ts: curStart - 49 * D + 7200e3, ex: 'squat', mode: 'reps', valid: 20 }
+  ], { today: t0 });
+  const w0 = dedup.weeks[0];
+  if (w0.points !== 30 || w0.days !== 1) fail('game10+reps20 应 points30/days1 实际 ' + w0.points + '/' + w0.days);
+
+  /* 过滤：非有限 ts / null 丢弃；窗外（早于 8 周）记录不计 */
+  const filt = X.weekStability([
+    { ts: curStart - 3 * 7 * D + 3600e3, ex: 'squat', mode: 'reps', valid: 50 },
+    { ts: NaN, ex: 'squat', mode: 'reps', valid: 999 },
+    null,
+    { ts: curStart - 200 * D, ex: 'squat', mode: 'reps', valid: 999 }
+  ], { today: t0 });
+  if (filt.activeWeeks !== 1 || filt.weeks.reduce((s, w) => s + w.points, 0) !== 50) fail('只应计窗口内 1 周 50 点 实际 ' + filt.activeWeeks + '/' + filt.weeks.reduce((s, w) => s + w.points, 0));
+
+  console.log('[ws] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');
