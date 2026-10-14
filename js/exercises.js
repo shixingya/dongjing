@@ -1234,7 +1234,9 @@
       { id: 'bronze',    ico: '\ud83e\udd49', name: '半千里程碑', desc: '累计 500 训练点',          kind: 'points',   target: 500 },
       { id: 'shine',     ico: '\u2728', name: '亮眼一节',   desc: '单节表现分冲上 95',        kind: 'bestScore', target: 95 },
       { id: 'iron',      ico: '\ud83d\udcaa', name: '百炼成钢', desc: '累计 100 节训练',           kind: 'count',    target: 100 },
-      { id: 'fortnight', ico: '\ud83c\udf19', name: '半月之约', desc: '连续打卡 14 天',            kind: 'streak',   target: 14 }
+      { id: 'fortnight', ico: '\ud83c\udf19', name: '半月之约', desc: '连续打卡 14 天',            kind: 'streak',   target: 14 },
+      { id: 'hundred',   ico: '\u2b50', name: '百点起步',   desc: '累计 100 训练点',           kind: 'points',   target: 100 },
+      { id: 'week200',   ico: '\ud83e\udd47', name: '单周双百', desc: '单周训练点满 200',        kind: 'weekBest', target: 200 }
     ];
     const list = defs.map(b => {
       const c = cur[b.kind] || 0;

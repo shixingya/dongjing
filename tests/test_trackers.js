@@ -733,9 +733,9 @@ function mkHand(tipDist) {
   const nowNoon = t0 + 12 * 3600e3;
   const mk = (off, ex, mode, valid) => ({ ts: t0 - off * D, ex, mode, valid });
 
-  /* --- 空数据：全未解锁、total=19（v3.18 加 iron/fortnight 后）--- */
+  /* --- 空数据：全未解锁、total=21（v3.20 加 hundred/week200 后）--- */
   const zero = X.computeAchievements({ records: [], posture: [] }, { now: nowNoon });
-  if (zero.total !== 19) fail('徽章数期望 19 实际 ' + zero.total);
+  if (zero.total !== 21) fail('徽章数期望 21 实际 ' + zero.total);
   if (zero.earned !== 0) fail('空数据不应有解锁');
   if (zero.list[0].id !== 'first' || zero.list[0].earned) fail('first 应未解锁');
   if (zero.list.find(b => b.id === 'burner').cur !== 0) fail('空数据 burner 应 0');
@@ -746,6 +746,8 @@ function mkHand(tipDist) {
   if (zero.list.find(b => b.id === 'shine').cur !== 0) fail('空数据 shine 应 0');
   if (zero.list.find(b => b.id === 'iron').cur !== 0) fail('空数据 iron 应 0');
   if (zero.list.find(b => b.id === 'fortnight').cur !== 0) fail('空数据 fortnight 应 0');
+  if (zero.list.find(b => b.id === 'hundred').cur !== 0) fail('空数据 hundred 应 0');
+  if (zero.list.find(b => b.id === 'week200').cur !== 0) fail('空数据 week200 应 0');
   console.log('[ach] 空数据 OK, total =', zero.total);
 
   /* --- 混合数据：口径与 streak 自洽 --- */
@@ -876,6 +878,24 @@ function mkHand(tipDist) {
   const achFN2 = X.computeAchievements({ records: fnRecs.slice(0, 13), posture: [] }, { now: nowNoon }); // 13 天
   if (achFN2.list.find(b => b.id === 'fortnight').earned) fail('fortnight：13 天不应解锁');
   console.log('[ach] iron/fortnight OK (100 节 / 14 天)');
+
+  /* --- v3.20 新徽章：hundred 百点起步（累计 100 点）、week200 单周双百（单周 200 点）--- */
+  const huRecs = [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 50 }, { ts: t0 - D + 36e5, ex: 'squat', mode: 'reps', valid: 50 }]; // 共 100 点
+  const achHU = X.computeAchievements({ records: huRecs, posture: [] }, { now: nowNoon });
+  const hu = achHU.list.find(b => b.id === 'hundred');
+  if (!hu || !hu.earned) fail('hundred：累计 100 点应解锁 实际 cur ' + (hu && hu.cur));
+  if (hu.cur !== 100) fail('hundred cur 期望 100 实际 ' + hu.cur);
+  const achHU2 = X.computeAchievements({ records: [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 99 }], posture: [] }, { now: nowNoon });
+  if (achHU2.list.find(b => b.id === 'hundred').earned) fail('hundred：99 点不应解锁');
+  /* week200：单周 250 点解锁（cur 封顶 200）、150 点不解锁 */
+  const achWk2 = X.computeAchievements({ records: [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 250 }], posture: [] }, { now: nowNoon });
+  const wk2 = achWk2.list.find(b => b.id === 'week200');
+  if (!wk2 || !wk2.earned) fail('week200：单周 250 点应解锁 实际 cur ' + (wk2 && wk2.cur));
+  if (wk2.cur !== 200) fail('week200 cur 封顶 200 实际 ' + wk2.cur);
+  const achWk2b = X.computeAchievements({ records: [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 150 }], posture: [] }, { now: nowNoon });
+  if (achWk2b.list.find(b => b.id === 'week200').earned) fail('week200：150 点不应解锁');
+  if (!achWk2b.list.find(b => b.id === 'weekchamp').earned) fail('week200 未解锁时 weekchamp(100) 仍应解锁 150 点');
+  console.log('[ach] hundred/week200 OK (100 点 / 单周 250 点)');
 
   console.log('[ach] 全部断言通过');
 }
