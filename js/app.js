@@ -1566,7 +1566,7 @@
     { t: '成就', s: '.ach-card' }, { t: '时段', s: '.dp-card' }, { t: '最佳', s: '.pb-card' },
     { t: '星期', s: '.wd-card' }, { t: '部位', s: '.bc-card' }, { t: '纠错', s: '.it-card' },
     { t: '构成', s: '.ms-card' }, { t: '走势', s: '.st-card' }, { t: '节奏', s: '.tc-card' },
-    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '月度', s: '.mt-card' }, { t: '高光', s: '.ts-card' }, { t: '均衡', s: '.tb-card' }, { t: '稳定', s: '.ws-card' }, { t: '效率', s: '.ef-card' }, { t: '热量', s: '.cp-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
+    { t: '时长', s: '.sd-card' }, { t: '提升', s: '.im-card' }, { t: '目标', s: '.gp-card' }, { t: '评分', s: '.sc-card' }, { t: '周纪录', s: '.wr-card' }, { t: '月度', s: '.mt-card' }, { t: '高光', s: '.ts-card' }, { t: '均衡', s: '.tb-card' }, { t: '稳定', s: '.ws-card' }, { t: '效率', s: '.ef-card' }, { t: '热量', s: '.cp-card' }, { t: '强度', s: '.ip-card' }, { t: '体态', s: '.pst-card' }, { t: '历史', s: '.hist-card' }
   ];
   function renderRepNav() {
     const nav = $('#rep-nav'); if (!nav) return;
@@ -1613,6 +1613,7 @@
     renderStability();
     renderEfficiency();
     renderCalorie();
+    renderIntensity();
     const WD = ['日', '一', '二', '三', '四', '五', '六'];
     const today = dayStart(Date.now());
     const bars = [];
@@ -2040,6 +2041,24 @@
       '<span class="cp-track"><i style="width:' + Math.round(m.cal / max * 100) + '%"></i></span>' +
       '<b class="cp-num">' + m.cal + '</b></div>').join('');
     if (sum) sum.innerHTML = '累计 <b>' + cp.total + '</b> 千卡 · 均 ' + cp.avg + '/节' + (cp.best ? ' · 最高单节「' + cp.best.name + '」' + cp.best.cal + ' 千卡' : '');
+  }
+
+  /* v3.23 强度画像：intensityProfile 纯逻辑算每分钟燃脂强度，这里按动作画行条 */
+  function renderIntensity() {
+    const box = $('#ip-rows'); if (!box) return;
+    const sum = $('#ip-sum');
+    const ip = X.intensityProfile(DB.records);
+    if (!ip.sessions) { box.innerHTML = '<div class="empty-tip">还没有能算强度的记录，训练时设好体重、做出有效动作就会自动算每分钟燃脂</div>'; if (sum) sum.textContent = ''; return; }
+    const max = Math.max(1, ...ip.items.map(it => it.rate));
+    box.innerHTML = ip.items.slice(0, 6).map(it =>
+      '<div class="ip-row" title="' + it.name + ' · ' + it.rate + ' 千卡/分（' + it.sessions + ' 节，共 ' + it.cal + ' 千卡）">' +
+      '<span class="ip-ico">' + it.ico + '</span>' +
+      '<span class="ip-name">' + it.name + '</span>' +
+      '<span class="ip-track"><i style="width:' + Math.round(it.rate / max * 100) + '%"></i></span>' +
+      '<b class="ip-num">' + it.rate + '</b></div>').join('');
+    const VD = { peak: '火力全开·强度很高', high: '强度不小·燃脂高效', moderate: '强度适中·很健康', light: '强度温与·可适度加码', none: '' };
+    const CLS = { peak: 'good', high: 'good', moderate: '', light: 'warn', none: '' };
+    if (sum) sum.innerHTML = '综合强度 <span class="ip-verdict ' + (CLS[ip.verdict] || '') + '">' + ip.overall + ' 千卡/分</span>·' + (VD[ip.verdict] || '') + (ip.total > 1 && ip.best ? '·最猛「' + ip.best.name + '」' : '');
   }
 
   /* ---------------- 我的 / Pro ---------------- */

@@ -1935,12 +1935,46 @@
       best: best ? { cal: Math.round(best.cal), name: best.name, date: label(best.ts) } : null, modes };
   }
 
+  /* ================= 强度画像（v3.23）=================
+   * 专看“练得多卖力”：用每分钟燃脂强度（千卡/分）衡量训练的密度。与 v3.21 热量画像
+   * 正交：那个看一共烧了多少（绝对总量），这个看单位时间烧得多快（强度）；与 v3.3
+   * 时长画像也不同（那个只看练多久）。只取真动作库且 cal 与 secs 都为正的记录（缺任一项
+   * 无法算密度），逐动作按时间加权算 Σcal×60/Σsecs；非有限 / 未知 id / null 丢弃不崩。 */
+  function intensityProfile(records) {
+    const meta = {};
+    EXERCISES.forEach(e => { meta[e.id] = e; });
+    const rs = (Array.isArray(records) ? records : [])
+      .filter(r => r && meta[r.ex] && Number.isFinite(r.cal) && r.cal > 0 && Number.isFinite(r.secs) && r.secs > 0);
+    const byId = {};
+    let calSum = 0, secSum = 0;
+    rs.forEach(r => {
+      calSum += r.cal; secSum += r.secs;
+      const b = byId[r.ex] || (byId[r.ex] = { id: r.ex, name: meta[r.ex].name, ico: meta[r.ex].ico, cal: 0, secs: 0, sessions: 0 });
+      b.cal += r.cal; b.secs += r.secs; b.sessions++;
+    });
+    const items = Object.keys(byId).map(id => {
+      const b = byId[id];
+      return { id, name: b.name, ico: b.ico, sessions: b.sessions, cal: Math.round(b.cal), rate: Math.round(b.cal * 60 / b.secs) };
+    }).sort((a, b) => b.rate - a.rate || b.sessions - a.sessions || a.name.localeCompare(b.name, 'zh'));
+    const overall = secSum ? Math.round(calSum * 60 / secSum) : 0;
+    const sessions = rs.length;
+    let verdict = 'none';
+    if (sessions) {
+      if (overall >= 9) verdict = 'peak';
+      else if (overall >= 6) verdict = 'high';
+      else if (overall >= 4) verdict = 'moderate';
+      else verdict = 'light';
+    }
+    return { items, total: items.length, sessions, overallCal: Math.round(calSum), overallSecs: secSum, overall, verdict,
+      best: items[0] || null, easiest: items.length ? items[items.length - 1] : null };
+  }
+
   window.DJX = {
     LAND, ang, mid, vis, visAll, pickSide, torsoH, uniq, HAND_CONNS,
     ISSUES, EXERCISES, analyzePosture, analyzePostureSide, mergePosture, planFromText, GAME_KINDS, makeGame,
     makeWeekPlan, WEEK_PLAN, TPL_MAX, templateOf, tplAdd, tplRemove, tplSafe, tplEstimate, tplName, exRoundSec,
     BACKUP_APP, BACKUP_VER, exportPayload, parseImport, sanitizeRecords, mergeRecords,
-    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend, topSessions, trainingBalance, weekStability, efficiencyStats, calorieProfile,
+    recPoints, buildHeatmap, achStreaks, computeAchievements, weekCompare, daypartStats, DAYPARTS, personalBests, weekdayRhythm, WEEKDAY_NAMES, bodyCoverage, BODY_REGIONS, lifetimeStats, issueTrend, modeSplit, MODE_SPLIT, scoreTrend, trainingCadence, sessionDuration, DUR_BUCKETS, improvementStats, goalProfile, scoreDistribution, SCORE_BUCKETS, weekRecords, monthlyTrend, topSessions, trainingBalance, weekStability, efficiencyStats, calorieProfile, intensityProfile,
     makeTracker(id) {
       return { squat: squatTracker, jack: jackTracker, highknees: highkneesTracker,
                pushup: pushupTracker, lunge: lungeTracker, plank: plankTracker,

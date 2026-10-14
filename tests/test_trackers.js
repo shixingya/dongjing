@@ -1820,4 +1820,55 @@ function mkHand(tipDist) {
   console.log('[cp] 全部断言通过');
 }
 
+/* ================= v3.23 强度画像 intensityProfile ================= */
+{
+  const D = 864e5;
+  const fail = m => { console.log('[ip] FAIL:', m); process.exit(1); };
+  if (typeof X.intensityProfile !== 'function') fail('intensityProfile 未导出');
+  const t0 = new Date(2026, 9, 15, 12).getTime();
+
+  /* 空 / null 不崩 */
+  const e = X.intensityProfile([]);
+  if (e.total !== 0 || e.sessions !== 0 || e.overall !== 0 || e.verdict !== 'none' || e.best !== null || e.easiest !== null || e.items.length !== 0) fail('空数据应 total0/sessions0/overall0/none/best null/easiest null/items []');
+  if (X.intensityProfile(null).sessions !== 0) fail('null 应不崩');
+
+  /* 主用例：squat(12/60 + 6/60 → 聚合 18/120=9) + jack(8/120=4) + plank(5/60=5) */
+  const r = X.intensityProfile([
+    { ts: t0, ex: 'squat', mode: 'reps', cal: 12, secs: 60 },
+    { ts: t0 - D, ex: 'jack', mode: 'reps', cal: 8, secs: 120 },
+    { ts: t0 - 2 * D, ex: 'plank', mode: 'time', cal: 5, secs: 60 },
+    { ts: t0 - 3 * D, ex: 'squat', mode: 'reps', cal: 6, secs: 60 },
+    { ts: t0, ex: 'game-collect', mode: 'game', cal: 20, secs: 60 },  // 非真动作库→排除
+    { ts: t0, ex: 'circuit', mode: 'reps', cal: 30, secs: 60 },        // 非真动作库→排除
+    { ts: t0, ex: 'squat', mode: 'reps', cal: NaN, secs: 60 },         // cal 非有限→排除
+    { ts: t0, ex: 'squat', mode: 'reps', cal: 10, secs: 0 },           // secs<=0→排除
+    { ts: t0, ex: 'squat', mode: 'reps', cal: 0, secs: 60 },           // cal<=0→排除
+    null
+  ]);
+  if (r.total !== 3 || r.sessions !== 4) fail('应 3 个动作/4 节（排除干扰）实际 ' + r.total + '/' + r.sessions);
+  if (r.overallCal !== 31 || r.overallSecs !== 300) fail('总 cal/secs 期望 31/300 实际 ' + r.overallCal + '/' + r.overallSecs);
+  if (r.overall !== 6 || r.verdict !== 'high') fail('综合强度 31×60/300=6.2→6/high 实际 ' + r.overall + '/' + r.verdict);
+  if (r.items[0].id !== 'squat' || r.items[0].rate !== 9 || r.items[0].sessions !== 2 || r.items[0].cal !== 18) fail('首行应 squat 聚合 rate9/2节/18cal 实际 ' + JSON.stringify(r.items[0]));
+  if (r.items[1].id !== 'plank' || r.items[1].rate !== 5) fail('次行应 plank rate5 实际 ' + JSON.stringify(r.items[1]));
+  if (r.items[2].id !== 'jack' || r.items[2].rate !== 4) fail('末行应 jack rate4 实际 ' + JSON.stringify(r.items[2]));
+  if (r.best.id !== 'squat' || r.easiest.id !== 'jack') fail('best squat / easiest jack');
+
+  /* 时间加权：同一动作两节 20 rate(10/30) 与 1 rate(2/120) 聚合应 12×60/150=4.8→5（而非均值的 10.5） */
+  const tw = X.intensityProfile([{ ts: t0, ex: 'squat', cal: 10, secs: 30 }, { ts: t0 - D, ex: 'squat', cal: 2, secs: 120 }]);
+  if (tw.items[0].rate !== 5 || tw.overall !== 5) fail('时间加权 rate 期望 5 实际 ' + tw.items[0].rate + '/' + tw.overall);
+
+  /* verdict 四档：peak(>=9)/moderate(4~6)/light(<4) */
+  if (X.intensityProfile([{ ts: t0, ex: 'squat', cal: 10, secs: 60 }]).verdict !== 'peak') fail('rate10 应 peak');
+  const mo = X.intensityProfile([{ ts: t0, ex: 'squat', cal: 5, secs: 60 }]);
+  if (mo.overall !== 5 || mo.verdict !== 'moderate') fail('rate5 应 moderate 实际 ' + mo.overall + '/' + mo.verdict);
+  const li = X.intensityProfile([{ ts: t0, ex: 'squat', cal: 2, secs: 120 }]);
+  if (li.overall !== 1 || li.verdict !== 'light') fail('rate1 应 light 实际 ' + li.overall + '/' + li.verdict);
+
+  /* ts 非法但 cal/secs 合法仍计入（强度不需 ts，与 efficiencyStats 一致） */
+  const nt = X.intensityProfile([{ ts: NaN, ex: 'squat', cal: 10, secs: 60 }]);
+  if (nt.sessions !== 1 || nt.overall !== 10) fail('NaN ts 应仍计入 实际 ' + nt.sessions + '/' + nt.overall);
+
+  console.log('[ip] 全部断言通过');
+}
+
 console.log('\n✅ 全部离线单测通过');
