@@ -733,9 +733,9 @@ function mkHand(tipDist) {
   const nowNoon = t0 + 12 * 3600e3;
   const mk = (off, ex, mode, valid) => ({ ts: t0 - off * D, ex, mode, valid });
 
-  /* --- 空数据：全未解锁、total=21（v3.20 加 hundred/week200 后）--- */
+  /* --- 空数据：全未解锁、total=23（v3.22 加 halfcent/ember 后）--- */
   const zero = X.computeAchievements({ records: [], posture: [] }, { now: nowNoon });
-  if (zero.total !== 21) fail('徽章数期望 21 实际 ' + zero.total);
+  if (zero.total !== 23) fail('徽章数期望 23 实际 ' + zero.total);
   if (zero.earned !== 0) fail('空数据不应有解锁');
   if (zero.list[0].id !== 'first' || zero.list[0].earned) fail('first 应未解锁');
   if (zero.list.find(b => b.id === 'burner').cur !== 0) fail('空数据 burner 应 0');
@@ -748,6 +748,8 @@ function mkHand(tipDist) {
   if (zero.list.find(b => b.id === 'fortnight').cur !== 0) fail('空数据 fortnight 应 0');
   if (zero.list.find(b => b.id === 'hundred').cur !== 0) fail('空数据 hundred 应 0');
   if (zero.list.find(b => b.id === 'week200').cur !== 0) fail('空数据 week200 应 0');
+  if (zero.list.find(b => b.id === 'halfcent').cur !== 0) fail('空数据 halfcent 应 0');
+  if (zero.list.find(b => b.id === 'ember').cur !== 0) fail('空数据 ember 应 0');
   console.log('[ach] 空数据 OK, total =', zero.total);
 
   /* --- 混合数据：口径与 streak 自洽 --- */
@@ -896,6 +898,29 @@ function mkHand(tipDist) {
   if (achWk2b.list.find(b => b.id === 'week200').earned) fail('week200：150 点不应解锁');
   if (!achWk2b.list.find(b => b.id === 'weekchamp').earned) fail('week200 未解锁时 weekchamp(100) 仍应解锁 150 点');
   console.log('[ach] hundred/week200 OK (100 点 / 单周 250 点)');
+
+  /* --- v3.22 新徽章：halfcent 半百课程（累计 50 节）、ember 两千热量挑战（累计 2000 方卡）--- */
+  const hcRecs = [];
+  for (let i = 0; i < 50; i++) hcRecs.push({ ts: t0 - i * D + 36e5, ex: 'squat', mode: 'reps', valid: 1 }); // 50 节
+  const achHC = X.computeAchievements({ records: hcRecs, posture: [] }, { now: nowNoon });
+  const hc = achHC.list.find(b => b.id === 'halfcent');
+  if (!hc || !hc.earned) fail('halfcent：累计 50 节应解锁 实际 cur ' + (hc && hc.cur));
+  if (hc.cur !== 50) fail('halfcent cur 期望 50 实际 ' + hc.cur);
+  const achHC2 = X.computeAchievements({ records: hcRecs.slice(0, 49), posture: [] }, { now: nowNoon }); // 49 节
+  if (achHC2.list.find(b => b.id === 'halfcent').earned) fail('halfcent：49 节不应解锁');
+  /* ember：累计 2000 千卡 */
+  const emRecs = [];
+  for (let i = 0; i < 10; i++) emRecs.push({ ts: t0 - i * D + 36e5, ex: 'squat', mode: 'reps', valid: 5, cal: 200 }); // 共 2000 千卡
+  const achEM = X.computeAchievements({ records: emRecs, posture: [] }, { now: nowNoon });
+  const em = achEM.list.find(b => b.id === 'ember');
+  if (!em || !em.earned) fail('ember：累计 2000 千卡应解锁 实际 cur ' + (em && em.cur));
+  if (em.cur !== 2000) fail('ember cur 期望 2000 实际 ' + em.cur);
+  const achEM2 = X.computeAchievements({ records: emRecs.slice(0, 9), posture: [] }, { now: nowNoon }); // 1800 千卡
+  if (achEM2.list.find(b => b.id === 'ember').earned) fail('ember：1800 千卡不应解锁');
+  /* 两枚新徽章不扰动混合数据 earned（仍 4：无 50 节/无 cal） */
+  if (res.list.find(b => b.id === 'halfcent').earned) fail('混合数据 5 节<50，halfcent 应锁住');
+  if (res.list.find(b => b.id === 'ember').earned) fail('混合数据无 cal，ember 应锁住');
+  console.log('[ach] halfcent/ember OK (50 节 / 2000 千卡)');
 
   console.log('[ach] 全部断言通过');
 }
