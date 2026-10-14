@@ -1187,14 +1187,14 @@
     const now = Number(o.now || o.today) || Date.now();
     const exTotal = EXERCISES.length;
     const exIds = new Set(EXERCISES.map(e => e.id));
-    let points = 0, secsSum = 0, calSum = 0, hasCircuit = false, hasGame = false;
+    let points = 0, secsSum = 0, calSum = 0, bestScore = 0, hasCircuit = false, hasGame = false;
     const exSeen = new Set();
     records.forEach(r => {
       if (!r) return;
       points += recPoints(r);
       if (Number.isFinite(r.secs) && r.secs > 0) secsSum += r.secs;
       if (Number.isFinite(r.cal) && r.cal > 0) calSum += r.cal;
-      if (r.ex && exIds.has(r.ex)) exSeen.add(r.ex);
+      if (r.ex && exIds.has(r.ex)) { exSeen.add(r.ex); if (Number.isFinite(r.score) && r.score > bestScore) bestScore = r.score; }
       if (r.ex === 'circuit') hasCircuit = true;
       if (r.mode === 'game' || (r.ex && String(r.ex).indexOf('game-') === 0)) hasGame = true;
     });
@@ -1213,7 +1213,7 @@
       count: records.length, ex: exSeen.size, streak: st.cur,
       points: Math.round(points), circuit: hasCircuit ? 1 : 0, game: hasGame ? 1 : 0, posture: posture.length,
       hitStreak: gp ? gp.longestHitStreak : 0, mins: Math.round(secsSum / 60),
-      cals: Math.round(calSum), weekBest, weekFull, monthBest
+      cals: Math.round(calSum), weekBest, weekFull, monthBest, bestScore: Math.round(bestScore)
     };
     const defs = [
       { id: 'first',     ico: '\ud83c\udf31', name: '开始出发',   desc: '完成第一次训练',        kind: 'count',   target: 1 },
@@ -1230,7 +1230,9 @@
       { id: 'burner',    ico: '\ud83d\udca5', name: '燃脂达人',   desc: '累计消耗满 1000 千卡',      kind: 'cals',    target: 1000 },
       { id: 'weekchamp', ico: '\ud83c\udfc6', name: '单周冠军',   desc: '单周训练点满 100',        kind: 'weekBest', target: 100 },
       { id: 'weekfull',  ico: '\ud83c\udf0d', name: '全勤周',     desc: '一周 7 天天天练到',        kind: 'weekFull', target: 7 },
-      { id: 'marathon',  ico: '\ud83d\uddc6', name: '月度马拉松', desc: '单月训练点满 300',        kind: 'monthBest', target: 300 }
+      { id: 'marathon',  ico: '\ud83d\uddc6', name: '月度马拉松', desc: '单月训练点满 300',        kind: 'monthBest', target: 300 },
+      { id: 'bronze',    ico: '\ud83e\udd49', name: '半千里程碑', desc: '累计 500 训练点',          kind: 'points',   target: 500 },
+      { id: 'shine',     ico: '\u2728', name: '亮眼一节',   desc: '单节表现分冲上 95',        kind: 'bestScore', target: 95 }
     ];
     const list = defs.map(b => {
       const c = cur[b.kind] || 0;

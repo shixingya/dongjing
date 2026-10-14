@@ -733,15 +733,17 @@ function mkHand(tipDist) {
   const nowNoon = t0 + 12 * 3600e3;
   const mk = (off, ex, mode, valid) => ({ ts: t0 - off * D, ex, mode, valid });
 
-  /* --- 空数据：全未解锁、total=15（v3.14 加 weekfull/marathon 后）--- */
+  /* --- 空数据：全未解锁、total=17（v3.16 加 bronze/shine 后）--- */
   const zero = X.computeAchievements({ records: [], posture: [] }, { now: nowNoon });
-  if (zero.total !== 15) fail('徽章数期望 15 实际 ' + zero.total);
+  if (zero.total !== 17) fail('徽章数期望 17 实际 ' + zero.total);
   if (zero.earned !== 0) fail('空数据不应有解锁');
   if (zero.list[0].id !== 'first' || zero.list[0].earned) fail('first 应未解锁');
   if (zero.list.find(b => b.id === 'burner').cur !== 0) fail('空数据 burner 应 0');
   if (zero.list.find(b => b.id === 'weekchamp').cur !== 0) fail('空数据 weekchamp 应 0');
   if (zero.list.find(b => b.id === 'weekfull').cur !== 0) fail('空数据 weekfull 应 0');
   if (zero.list.find(b => b.id === 'marathon').cur !== 0) fail('空数据 marathon 应 0');
+  if (zero.list.find(b => b.id === 'bronze').cur !== 0) fail('空数据 bronze 应 0');
+  if (zero.list.find(b => b.id === 'shine').cur !== 0) fail('空数据 shine 应 0');
   console.log('[ach] 空数据 OK, total =', zero.total);
 
   /* --- 混合数据：口径与 streak 自洽 --- */
@@ -787,6 +789,8 @@ function mkHand(tipDist) {
   if (res.list.find(b => b.id === 'weekchamp').earned) fail('混合数据单周点 <100，weekchamp 应锁住');
   if (res.list.find(b => b.id === 'weekfull').earned) fail('混合数据无满 7 天周，weekfull 应锁住');
   if (res.list.find(b => b.id === 'marathon').earned) fail('混合数据月点 <300，marathon 应锁住');
+  if (res.list.find(b => b.id === 'bronze').earned) fail('混合数据 points<500，bronze 应锁住');
+  if (res.list.find(b => b.id === 'shine').earned) fail('混合数据无 score，shine 应锁住');
 
   /* --- v3.12 新徽章：burner 累计千卡、weekchamp 单周冠军 --- */
   const calRecs = [];
@@ -828,6 +832,26 @@ function mkHand(tipDist) {
   const achMA2 = X.computeAchievements({ records: [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 250 }], posture: [] }, { now: nowNoon });
   if (achMA2.list.find(b => b.id === 'marathon').earned) fail('marathon：250 点不应解锁');
   console.log('[ach] weekfull/marathon OK (7 天 / 月 350 点)');
+
+  /* --- v3.16 新徽章：bronze 半千里程碑、shine 亮眼一节 --- */
+  const brRecs = [];
+  for (let i = 0; i < 10; i++) brRecs.push({ ts: t0 - i * D + 36e5, ex: 'squat', mode: 'reps', valid: 50 }); // 共 500 点
+  const achBR = X.computeAchievements({ records: brRecs, posture: [] }, { now: nowNoon });
+  const br = achBR.list.find(b => b.id === 'bronze');
+  if (!br || !br.earned) fail('bronze：累计 500 点应解锁 实际 cur ' + (br && br.cur));
+  if (br.cur !== 500) fail('bronze cur 期望 500 实际 ' + br.cur);
+  const achBR2 = X.computeAchievements({ records: brRecs.slice(0, 9), posture: [] }, { now: nowNoon }); // 450 点
+  if (achBR2.list.find(b => b.id === 'bronze').earned) fail('bronze：450 点不应解锁');
+  /* shine：单节表现分 ≥95（只认真动作 id） */
+  const achSH = X.computeAchievements({ records: [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 10, score: 96 }], posture: [] }, { now: nowNoon });
+  const sh = achSH.list.find(b => b.id === 'shine');
+  if (!sh || !sh.earned) fail('shine：单节 96 分应解锁 实际 cur ' + (sh && sh.cur));
+  if (sh.cur !== 95) fail('shine cur 封顶 95 实际 ' + sh.cur);
+  const achSH2 = X.computeAchievements({ records: [{ ts: t0 + 36e5, ex: 'game-collect', mode: 'game', valid: 30, score: 99 }], posture: [] }, { now: nowNoon });
+  if (achSH2.list.find(b => b.id === 'shine').earned) fail('shine：game 单节 99 分不应解锁（只认真动作）');
+  const achSH3 = X.computeAchievements({ records: [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 10, score: 90 }], posture: [] }, { now: nowNoon });
+  if (achSH3.list.find(b => b.id === 'shine').earned) fail('shine：90 分不应解锁');
+  console.log('[ach] bronze/shine OK (500 点 / 96 分)');
 
   console.log('[ach] 全部断言通过');
 }
