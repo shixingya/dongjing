@@ -733,9 +733,9 @@ function mkHand(tipDist) {
   const nowNoon = t0 + 12 * 3600e3;
   const mk = (off, ex, mode, valid) => ({ ts: t0 - off * D, ex, mode, valid });
 
-  /* --- 空数据：全未解锁、total=23（v3.22 加 halfcent/ember 后）--- */
+  /* --- 空数据：全未解锁、total=25（v3.24 加 goldstar/hours10 后）--- */
   const zero = X.computeAchievements({ records: [], posture: [] }, { now: nowNoon });
-  if (zero.total !== 23) fail('徽章数期望 23 实际 ' + zero.total);
+  if (zero.total !== 25) fail('徽章数期望 25 实际 ' + zero.total);
   if (zero.earned !== 0) fail('空数据不应有解锁');
   if (zero.list[0].id !== 'first' || zero.list[0].earned) fail('first 应未解锁');
   if (zero.list.find(b => b.id === 'burner').cur !== 0) fail('空数据 burner 应 0');
@@ -750,6 +750,8 @@ function mkHand(tipDist) {
   if (zero.list.find(b => b.id === 'week200').cur !== 0) fail('空数据 week200 应 0');
   if (zero.list.find(b => b.id === 'halfcent').cur !== 0) fail('空数据 halfcent 应 0');
   if (zero.list.find(b => b.id === 'ember').cur !== 0) fail('空数据 ember 应 0');
+  if (zero.list.find(b => b.id === 'goldstar').cur !== 0) fail('空数据 goldstar 应 0');
+  if (zero.list.find(b => b.id === 'hours10').cur !== 0) fail('空数据 hours10 应 0');
   console.log('[ach] 空数据 OK, total =', zero.total);
 
   /* --- 混合数据：口径与 streak 自洽 --- */
@@ -921,6 +923,29 @@ function mkHand(tipDist) {
   if (res.list.find(b => b.id === 'halfcent').earned) fail('混合数据 5 节<50，halfcent 应锁住');
   if (res.list.find(b => b.id === 'ember').earned) fail('混合数据无 cal，ember 应锁住');
   console.log('[ach] halfcent/ember OK (50 节 / 2000 千卡)');
+
+  /* --- v3.24 新徽章：goldstar 两千俱乐部（累计 2000 点）、hours10 十小时铁人（累计 600 分钟）--- */
+  const gsRecs = [];
+  for (let i = 0; i < 20; i++) gsRecs.push({ ts: t0 - i * D + 36e5, ex: 'squat', mode: 'reps', valid: 100 }); // 共 2000 点
+  const achGS = X.computeAchievements({ records: gsRecs, posture: [] }, { now: nowNoon });
+  const gs = achGS.list.find(b => b.id === 'goldstar');
+  if (!gs || !gs.earned) fail('goldstar：累计 2000 点应解锁 实际 cur ' + (gs && gs.cur));
+  if (gs.cur !== 2000) fail('goldstar cur 期望 2000 实际 ' + gs.cur);
+  const achGS2 = X.computeAchievements({ records: gsRecs.slice(0, 19), posture: [] }, { now: nowNoon }); // 1900 点
+  if (achGS2.list.find(b => b.id === 'goldstar').earned) fail('goldstar：1900 点不应解锁');
+  /* hours10：累计 600 分钟（secsSum 36000） */
+  const hrRecs = [];
+  for (let i = 0; i < 10; i++) hrRecs.push({ ts: t0 - i * D + 36e5, ex: 'squat', mode: 'reps', valid: 1, secs: 3600 }); // 10×3600s = 36000s = 600min
+  const achHR = X.computeAchievements({ records: hrRecs, posture: [] }, { now: nowNoon });
+  const hr = achHR.list.find(b => b.id === 'hours10');
+  if (!hr || !hr.earned) fail('hours10：累计 600 分钟应解锁 实际 cur ' + (hr && hr.cur));
+  if (hr.cur !== 600) fail('hours10 cur 期望 600 实际 ' + hr.cur);
+  const achHR2 = X.computeAchievements({ records: hrRecs.slice(0, 9), posture: [] }, { now: nowNoon }); // 540min
+  if (achHR2.list.find(b => b.id === 'hours10').earned) fail('hours10：540 分钟不应解锁');
+  /* 两枚新徽章不扰动混合数据 earned（仍 4：无 2000 点/无 secs） */
+  if (res.list.find(b => b.id === 'goldstar').earned) fail('混合数据 points 32<2000，goldstar 应锁住');
+  if (res.list.find(b => b.id === 'hours10').earned) fail('混合数据无 secs，hours10 应锁住');
+  console.log('[ach] goldstar/hours10 OK (2000 点 / 600 分钟)');
 
   console.log('[ach] 全部断言通过');
 }
