@@ -1240,7 +1240,9 @@
       { id: 'halfcent',  ico: '\ud83d\udcff', name: '半百课程', desc: '累计 50 节训练',            kind: 'count',    target: 50 },
       { id: 'ember',     ico: '\ud83c\udf0b', name: '两千热量挑战', desc: '累计消耗满 2000 千卡',      kind: 'cals',     target: 2000 },
       { id: 'goldstar',  ico: '\ud83c\udf1f', name: '两千俱乐部', desc: '累计 2000 训练点',            kind: 'points',   target: 2000 },
-      { id: 'hours10',   ico: '\ud83d\udd50', name: '十小时铁人', desc: '累计运动满 600 分钟',        kind: 'mins',     target: 600 }
+      { id: 'hours10',   ico: '\ud83d\udd50', name: '十小时铁人', desc: '累计运动满 600 分钟',        kind: 'mins',     target: 600 },
+      { id: 'perfect',   ico: '\ud83d\udc51', name: '满分一节课', desc: '单节表现分冲上满分',          kind: 'bestScore', target: 100 },
+      { id: 'summit',    ico: '\ud83c\udfd4', name: '五千热量巅峰', desc: '累计消耗满 5000 千卡',        kind: 'cals',     target: 5000 }
     ];
     const list = defs.map(b => {
       const c = cur[b.kind] || 0;

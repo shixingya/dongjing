@@ -733,9 +733,9 @@ function mkHand(tipDist) {
   const nowNoon = t0 + 12 * 3600e3;
   const mk = (off, ex, mode, valid) => ({ ts: t0 - off * D, ex, mode, valid });
 
-  /* --- 空数据：全未解锁、total=25（v3.24 加 goldstar/hours10 后）--- */
+  /* --- 空数据：全未解锁、total=27（v3.26 加 perfect/summit 后）--- */
   const zero = X.computeAchievements({ records: [], posture: [] }, { now: nowNoon });
-  if (zero.total !== 25) fail('徽章数期望 25 实际 ' + zero.total);
+  if (zero.total !== 27) fail('徽章数期望 27 实际 ' + zero.total);
   if (zero.earned !== 0) fail('空数据不应有解锁');
   if (zero.list[0].id !== 'first' || zero.list[0].earned) fail('first 应未解锁');
   if (zero.list.find(b => b.id === 'burner').cur !== 0) fail('空数据 burner 应 0');
@@ -752,6 +752,8 @@ function mkHand(tipDist) {
   if (zero.list.find(b => b.id === 'ember').cur !== 0) fail('空数据 ember 应 0');
   if (zero.list.find(b => b.id === 'goldstar').cur !== 0) fail('空数据 goldstar 应 0');
   if (zero.list.find(b => b.id === 'hours10').cur !== 0) fail('空数据 hours10 应 0');
+  if (zero.list.find(b => b.id === 'perfect').cur !== 0) fail('空数据 perfect 应 0');
+  if (zero.list.find(b => b.id === 'summit').cur !== 0) fail('空数据 summit 应 0');
   console.log('[ach] 空数据 OK, total =', zero.total);
 
   /* --- 混合数据：口径与 streak 自洽 --- */
@@ -946,6 +948,34 @@ function mkHand(tipDist) {
   if (res.list.find(b => b.id === 'goldstar').earned) fail('混合数据 points 32<2000，goldstar 应锁住');
   if (res.list.find(b => b.id === 'hours10').earned) fail('混合数据无 secs，hours10 应锁住');
   console.log('[ach] goldstar/hours10 OK (2000 点 / 600 分钟)');
+
+  /* --- v3.26 新徽章：perfect 满分一节课（单节表现分 100）、summit 五千热量巅峰（累计 5000 千卡）--- */
+  const pfRecs = [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 10, score: 100 }];
+  const achPF = X.computeAchievements({ records: pfRecs, posture: [] }, { now: nowNoon });
+  const pf = achPF.list.find(b => b.id === 'perfect');
+  if (!pf || !pf.earned) fail('perfect：单节 100 分应解锁 实际 cur ' + (pf && pf.cur));
+  if (pf.cur !== 100) fail('perfect cur 期望 100 实际 ' + pf.cur);
+  /* 99 分不解锁（shine95 仍解锁，perfect 要满分） */
+  const achPF2 = X.computeAchievements({ records: [{ ts: t0 + 36e5, ex: 'squat', mode: 'reps', valid: 10, score: 99 }], posture: [] }, { now: nowNoon });
+  if (achPF2.list.find(b => b.id === 'perfect').earned) fail('perfect：99 分不应解锁');
+  if (!achPF2.list.find(b => b.id === 'shine').earned) fail('perfect 未解锁时 shine(95) 仍应解锁 99 分');
+  /* game 单节满分不计（只认真动作库，与 shine 同口径） */
+  const achPF3 = X.computeAchievements({ records: [{ ts: t0 + 36e5, ex: 'game-collect', mode: 'game', valid: 30, score: 100 }], posture: [] }, { now: nowNoon });
+  if (achPF3.list.find(b => b.id === 'perfect').earned) fail('perfect：game 单节 100 分不应解锁（只认真动作）');
+  /* summit：累计 5000 千卡 */
+  const suRecs = [];
+  for (let i = 0; i < 10; i++) suRecs.push({ ts: t0 - i * D + 36e5, ex: 'squat', mode: 'reps', valid: 5, cal: 500 }); // 共 5000 千卡
+  const achSU = X.computeAchievements({ records: suRecs, posture: [] }, { now: nowNoon });
+  const su = achSU.list.find(b => b.id === 'summit');
+  if (!su || !su.earned) fail('summit：累计 5000 千卡应解锁 实际 cur ' + (su && su.cur));
+  if (su.cur !== 5000) fail('summit cur 期望 5000 实际 ' + su.cur);
+  const achSU2 = X.computeAchievements({ records: suRecs.slice(0, 9), posture: [] }, { now: nowNoon }); // 4500 千卡
+  if (achSU2.list.find(b => b.id === 'summit').earned) fail('summit：4500 千卡不应解锁');
+  if (!achSU2.list.find(b => b.id === 'ember').earned) fail('summit 未解锁时 ember(2000) 仍应解锁 4500 千卡');
+  /* 两枚新徽章不扰动混合数据 earned（仍 4：无满分 score/无 cal） */
+  if (res.list.find(b => b.id === 'perfect').earned) fail('混合数据无 score，perfect 应锁住');
+  if (res.list.find(b => b.id === 'summit').earned) fail('混合数据无 cal，summit 应锁住');
+  console.log('[ach] perfect/summit OK (满分 100 / 5000 千卡)');
 
   console.log('[ach] 全部断言通过');
 }
